@@ -289,8 +289,8 @@
         </div>
         <div class="form-group"><label>試合日</label><input type="date" id="game-date"></div>
         <div class="form-group"><label>対戦相手</label><input type="text" id="game-opponent" placeholder="○○チーム"></div>
-        <div class="form-group"><label>自軍得点</label><select id="game-score-us"></select></div>
-        <div class="form-group"><label>敵軍得点</label><select id="game-score-them"></select></div>
+        <div class="form-group"><label>自軍得点</label><input type="number" id="game-score-us" value="0" min="0" max="99" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:inherit;font-size:14px;outline:none;width:100%;"></div>
+        <div class="form-group"><label>敵軍得点</label><input type="number" id="game-score-them" value="0" min="0" max="99" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:inherit;font-size:14px;outline:none;width:100%;"></div>
       </div>
       <div style="margin-top:20px;text-align:right;">
         <button class="btn btn-primary" onclick="saveGame()">試合を登録する</button>
@@ -414,9 +414,6 @@ function checkPassword() {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-  ['game-score-us','game-score-them'].forEach(id => {
-    document.getElementById(id).innerHTML = numOpts(0);
-  });
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('game-date').value = today;
   if (sessionStorage.getItem('bs_auth') === '1') {
@@ -728,7 +725,7 @@ async function saveGameEdit(gid) {
 
 function numOpts(val) {
   let s = '';
-  for (let i = 0; i <= 99; i++) s += `<option${i == val ? ' selected' : ''}>${i}</option>`;
+  for (let i = 0; i <= 20; i++) s += `<option${i == val ? ' selected' : ''}>${i}</option>`;
   return s;
 }
 
