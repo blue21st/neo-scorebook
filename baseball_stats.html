@@ -699,7 +699,7 @@ function renderGames() {
         </div>
       </div>
       <div class="stats-panel ${openGameId === g.id ? 'open' : ''}" id="spanel-${g.id}">
-        ${buildStatsPanel(g)}
+        ${openGameId === g.id ? buildStatsPanel(g) : ''}
       </div>
     </div>`;
   }).join('');
@@ -925,15 +925,17 @@ function toggleStatsPanel(gid) {
   if (openGameId === gid) {
     openGameId = null;
     const panel = document.getElementById(`spanel-${gid}`);
-    if (panel) panel.classList.remove('open');
+    if (panel) { panel.classList.remove('open'); panel.innerHTML = ''; }
   } else {
     if (openGameId !== null) {
       const prev = document.getElementById(`spanel-${openGameId}`);
-      if (prev) prev.classList.remove('open');
+      if (prev) { prev.classList.remove('open'); prev.innerHTML = ''; }
     }
     openGameId = gid;
     const panel = document.getElementById(`spanel-${gid}`);
-    if (panel) {
+    const g = games.find(x => x.id === gid);
+    if (panel && g) {
+      panel.innerHTML = buildStatsPanel(g);
       panel.classList.add('open');
       setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
     }
