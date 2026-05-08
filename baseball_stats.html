@@ -288,15 +288,15 @@
     <div class="form-card">
       <div class="form-title">試合を追加</div>
       <div class="form-grid">
-        <div class="form-group"><label>年度</label><input type="number" id="game-season" value="2026"></div>
+        <div class="form-group"><label>年度</label><select id="game-season">${[...Array(16)].map((_,i)=>`<option value="${2020+i}"${2020+i===2026?' selected':''}>${2020+i}年</option>`).join('')}</select></div>
         <div class="form-group"><label>種別</label><select id="game-type"><option>公式戦</option><option>練習試合</option></select></div>
         <div class="form-group" style="grid-column:1/-1;"><label>大会名（任意）</label>
           <input type="text" id="game-tournament" placeholder="例：春季大会" list="tournament-list" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
         </div>
         <div class="form-group"><label>試合日</label><input type="date" id="game-date"></div>
         <div class="form-group"><label>対戦相手</label><input type="text" id="game-opponent" placeholder="○○チーム" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></div>
-        <div class="form-group"><label>自軍得点</label><input type="number" id="game-score-us" value="0" min="0" max="99" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:inherit;font-size:14px;outline:none;width:100%;"></div>
-        <div class="form-group"><label>敵軍得点</label><input type="number" id="game-score-them" value="0" min="0" max="99" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:inherit;font-size:14px;outline:none;width:100%;"></div>
+        <div class="form-group"><label>自軍得点</label><select id="game-score-us">${[...Array(21)].map((_,i)=>`<option value="${i}">${i}</option>`).join('')}</select></div>
+        <div class="form-group"><label>敵軍得点</label><select id="game-score-them">${[...Array(21)].map((_,i)=>`<option value="${i}">${i}</option>`).join('')}</select></div>
       </div>
       <div style="margin-top:20px;text-align:right;">
         <button class="btn btn-primary" onclick="saveGame()">試合を登録する</button>
@@ -312,7 +312,7 @@
     <div class="form-card" style="margin-bottom:20px;">
       <div class="form-title">選手を追加</div>
       <div class="player-add-row">
-        <input type="number" id="reg-number" placeholder="背番号" min="0" max="99" style="width:80px;">
+        <select id="reg-number" style="width:80px;"><option value="">番号</option>${[...Array(100)].map((_,i)=>`<option value="${i}">${i}</option>`).join('')}</select>
         <input type="text" id="reg-name" placeholder="氏名" style="flex:1;" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
         <select id="reg-pos">
           <option>投手</option><option>捕手</option><option>内野手</option><option>外野手</option>
@@ -696,8 +696,8 @@ function buildGameEditPanel(g) {
       <div class="form-group"><label>種別</label><select id="gedit-type-${g.id}" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:16px;outline:none;width:100%;"><option${(g.type||'公式戦')==='公式戦'?' selected':''}>公式戦</option><option${(g.type||'')==='練習試合'?' selected':''}>練習試合</option></select></div>
       <div class="form-group" style="grid-column:1/-1;"><label>大会名（任意）</label><input type="text" id="gedit-tournament-${g.id}" value="${g.tournament||''}" list="tournament-list" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:16px;outline:none;width:100%;"></div>
       <div class="form-group" style="grid-column:1/-1;"><label>対戦相手</label><input type="text" id="gedit-opponent-${g.id}" value="${g.opponent}" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:16px;outline:none;width:100%;"></div>
-      <div class="form-group"><label>自軍得点</label><input type="number" id="gedit-us-${g.id}" value="${g.us||0}" min="0" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:16px;outline:none;width:100%;"></div>
-      <div class="form-group"><label>敵軍得点</label><input type="number" id="gedit-them-${g.id}" value="${g.them||0}" min="0" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:16px;outline:none;width:100%;"></div>
+      <div class="form-group"><label>自軍得点</label><select id="gedit-us-${g.id}" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:16px;outline:none;width:100%;">${[...Array(21)].map((_,i)=>`<option value="${i}"${i===(g.us||0)?' selected':''}>${i}</option>`).join('')}</select></div>
+      <div class="form-group"><label>敵軍得点</label><select id="gedit-them-${g.id}" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:16px;outline:none;width:100%;">${[...Array(21)].map((_,i)=>`<option value="${i}"${i===(g.them||0)?' selected':''}>${i}</option>`).join('')}</select></div>
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;">
       <button class="btn btn-danger" onclick="deleteGame(${g.id})">削除</button>
