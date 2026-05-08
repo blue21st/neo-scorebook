@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>野球成績管理 - BALLSTATS</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
@@ -18,6 +18,7 @@
     --red: #ef4444;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  input, select, textarea { font-size: 16px !important; }
   body { background: var(--bg); color: var(--text); font-family: 'Noto Sans JP', sans-serif; min-height: 100vh; }
   header {
     background: var(--surface); border-bottom: 1px solid var(--border);
@@ -64,7 +65,7 @@
   .form-group input, .form-group select {
     background: var(--bg); border: 1px solid var(--border);
     border-radius: 8px; padding: 10px 12px; color: var(--text);
-    font-family: 'Noto Sans JP', sans-serif; font-size: 14px; outline: none;
+    font-family: 'Noto Sans JP', sans-serif; font-size: 16px; outline: none;
   }
   .btn { padding: 10px 22px; border-radius: 8px; border: none; cursor: pointer; font-family: 'Noto Sans JP', sans-serif; font-weight: 700; font-size: 14px; transition: all 0.2s; }
   .btn-primary { background: var(--accent); color: #000; }
@@ -97,7 +98,7 @@
   .ps-card-stats { display: flex; gap: 6px; }
   .ps-stat { display: flex; flex-direction: column; align-items: center; flex: 1; gap: 4px; }
   .ps-stat label { font-size: 10px; color: var(--muted); letter-spacing: 0.5px; white-space: nowrap; }
-  .ps-input { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 2px; color: var(--text); font-size: 14px; text-align: center; outline: none; font-family: 'Noto Sans JP', sans-serif; }
+  .ps-input { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 2px; color: var(--text); font-size: 16px; text-align: center; outline: none; font-family: 'Noto Sans JP', sans-serif; }
   .ps-input:focus { border-color: var(--accent); }
   .stats-save-row { display: flex; justify-content: flex-end; margin-top: 16px; gap: 8px; }
   .detail-section { display: none; padding: 10px 0 4px; border-top: 1px solid var(--border); margin-top: 10px; }
