@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>野球成績管理 - BALLSTATS</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --accent: #e8c840;
+    --text: #f0f4ff;
+    --muted: #6b7a99;
+    --border: rgba(255,255,255,0.08);
+    --green: #22c55e;
+    --red: #ef4444;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Noto Sans JP', sans-serif; min-height: 100vh; }
+  header {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 0 24px; display: flex; align-items: center; height: 60px;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { font-family: 'Bebas Neue', sans-serif; font-size: 28px; letter-spacing: 3px; color: var(--accent); }
+  .logo span { color: var(--text); }
+  .main { max-width: 900px; margin: 0 auto; padding: 32px 16px; }
+
+  .tabs { display: flex; gap: 4px; margin-bottom: 28px; background: var(--surface); border-radius: 10px; padding: 4px; width: fit-content; }
+  .tab {
+    padding: 8px 20px; border-radius: 7px; border: none; cursor: pointer;
+    font-family: 'Noto Sans JP', sans-serif; font-size: 14px; font-weight: 500;
+    background: transparent; color: var(--muted); transition: all 0.2s;
+  }
+  .tab.active { background: var(--accent); color: #000; }
+  .tab:hover:not(.active) { color: var(--text); }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 28px; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 16px; }
+  .stat-card .label { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px; }
+  .stat-card .value { font-family: 'Bebas Neue', sans-serif; font-size: 36px; color: var(--accent); }
+
+  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; }
+  thead { background: var(--surface2); }
+  th { padding: 12px 14px; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); text-align: center; font-weight: 500; white-space: nowrap; }
+  th:first-child { text-align: left; }
+  td { padding: 13px 14px; font-size: 14px; text-align: center; border-top: 1px solid var(--border); white-space: nowrap; }
+  td:first-child { text-align: left; font-weight: 500; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  .player-num { font-family: 'Bebas Neue', sans-serif; font-size: 20px; color: var(--muted); margin-right: 10px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; background: var(--surface2); color: var(--muted); }
+
+  .form-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 24px; }
+  .form-title { font-family: 'Bebas Neue', sans-serif; font-size: 24px; color: var(--accent); margin-bottom: 20px; letter-spacing: 2px; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-group label { font-size: 12px; color: var(--muted); }
+  .form-group input, .form-group select {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px; color: var(--text);
+    font-family: 'Noto Sans JP', sans-serif; font-size: 14px; outline: none;
+  }
+  .btn { padding: 10px 22px; border-radius: 8px; border: none; cursor: pointer; font-family: 'Noto Sans JP', sans-serif; font-weight: 700; font-size: 14px; transition: all 0.2s; }
+  .btn-primary { background: var(--accent); color: #000; }
+  .btn-outline { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .btn-danger { background: transparent; color: var(--red); border: 1px solid rgba(239,68,68,0.3); font-size: 12px; padding: 6px 12px; }
+  .btn-sm { padding: 6px 14px; font-size: 12px; }
+
+  .toast { position: fixed; bottom: 24px; right: 24px; background: var(--green); color: #fff; padding: 12px 20px; border-radius: 10px; font-size: 14px; font-weight: 500; transform: translateY(80px); opacity: 0; transition: all 0.3s; z-index: 999; }
+  .toast.show { transform: translateY(0); opacity: 1; }
+
+  .game-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; margin-bottom: 12px; overflow: hidden; }
+  .game-card-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; }
+  .game-info .date { font-size: 12px; color: var(--muted); margin-bottom: 2px; }
+  .game-info .opponent { font-weight: 700; font-size: 15px; }
+  .game-info .type-badge { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 4px; background: var(--surface2); color: var(--muted); margin-left: 8px; vertical-align: middle; }
+  .game-score { font-family: 'Bebas Neue', sans-serif; font-size: 28px; color: var(--accent); }
+  .game-score.lose { color: var(--red); }
+  .game-actions { display: flex; gap: 8px; align-items: center; }
+
+  .stats-panel { display: none; border-top: 1px solid var(--border); padding: 20px; background: var(--surface2); }
+  .stats-panel.open { display: block; }
+  .stats-panel-title { font-size: 12px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 14px; }
+
+  .player-stats-grid { display: flex; flex-direction: column; gap: 8px; }
+  .ps-player-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .ps-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .ps-name { font-size: 14px; display: flex; align-items: center; gap: 8px; font-weight: 500; }
+  .ps-num { font-family: 'Bebas Neue', sans-serif; font-size: 18px; color: var(--muted); min-width: 24px; }
+  .ps-card-stats { display: flex; gap: 6px; }
+  .ps-stat { display: flex; flex-direction: column; align-items: center; flex: 1; gap: 4px; }
+  .ps-stat label { font-size: 10px; color: var(--muted); letter-spacing: 0.5px; white-space: nowrap; }
+  .ps-input { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 2px; color: var(--text); font-size: 14px; text-align: center; outline: none; font-family: 'Noto Sans JP', sans-serif; }
+  .ps-input:focus { border-color: var(--accent); }
+  .stats-save-row { display: flex; justify-content: flex-end; margin-top: 16px; gap: 8px; }
+  .detail-section { display: none; padding: 10px 0 4px; border-top: 1px solid var(--border); margin-top: 10px; }
+  .detail-section.open { display: block; }
+  .detail-row { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+  .detail-num { font-family: 'Bebas Neue', sans-serif; font-size: 14px; color: var(--muted); min-width: 18px; text-align: right; }
+  .adv-row { display: none; }
+  .adv-row.open { display: table-row; }
+
+  .player-add-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .player-add-row input, .player-add-row select { padding: 10px; background: var(--bg); border: 1px solid var(--border); color: white; border-radius: 8px; font-family: 'Noto Sans JP', sans-serif; outline: none; }
+
+  @media (max-width: 600px) {
+    .main { padding: 16px 10px; }
+    .tabs { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); }
+    .tab { padding: 9px 4px; font-size: 12px; text-align: center; }
+    .form-grid { grid-template-columns: 1fr; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .game-score { font-size: 22px; }
+    .game-card-header { flex-wrap: wrap; gap: 10px; }
+    .ps-card-stats { gap: 4px; }
+    .ps-input { padding: 8px 1px; font-size: 13px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ロック画面 -->
+<div id="lock-screen" style="position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:40px 32px;width:90%;max-width:360px;text-align:center;">
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:36px;color:var(--accent);letter-spacing:3px;margin-bottom:8px;">⚾ BALLSTATS</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:28px;">パスワードを入力してください</div>
+    <input type="password" id="pw-input" placeholder="パスワード"
+      style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 16px;color:var(--text);font-size:16px;font-family:inherit;outline:none;text-align:center;margin-bottom:12px;"
+      onkeydown="if(event.key==='Enter')checkPassword()">
+    <button type="button" onclick="checkPassword()" class="btn btn-primary" style="width:100%;">ログイン</button>
+    <div id="pw-error" style="display:none;color:var(--red);font-size:13px;margin-top:10px;">パスワードが違います</div>
+  </div>
+</div>
+
+<div id="app-content" style="display:none;">
+<header>
+  <div class="logo">⚾ BALL<span>STATS</span></div>
+</header>
+
+<div class="main">
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('stats')">成績一覧</button>
+    <button class="tab" onclick="switchTab('register')">選手一覧</button>
+    <button class="tab" onclick="switchTab('games')">試合一覧</button>
+    <button class="tab" onclick="switchTab('add')">試合追加</button>
+  </div>
+
+  <!-- 成績一覧 -->
+  <div class="panel active" id="panel-stats">
+    <div class="stats-grid" id="overview-cards"></div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="text-align:left">選手</th>
+            <th>打率</th><th>打数</th><th>安打</th><th>打点</th><th>本塁打</th><th>盗塁</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="stats-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 試合一覧 -->
+  <div class="panel" id="panel-games">
+    <div id="game-list-wrap"></div>
+  </div>
+
+  <!-- 試合追加 -->
+  <div class="panel" id="panel-add">
+    <div class="form-card">
+      <div class="form-title">試合を追加</div>
+      <div class="form-grid">
+        <div class="form-group"><label>年度</label><input type="number" id="game-season" value="2026"></div>
+        <div class="form-group"><label>種別</label><select id="game-type"><option>公式戦</option><option>練習試合</option></select></div>
+        <div class="form-group"><label>試合日</label><input type="date" id="game-date"></div>
+        <div class="form-group"><label>対戦相手</label><input type="text" id="game-opponent" placeholder="○○チーム"></div>
+        <div class="form-group"><label>自軍得点</label><select id="game-score-us"></select></div>
+        <div class="form-group"><label>敵軍得点</label><select id="game-score-them"></select></div>
+      </div>
+      <div style="margin-top:20px;text-align:right;">
+        <button class="btn btn-primary" onclick="saveGame()">試合を登録する</button>
+      </div>
+      <div style="margin-top:16px;padding:14px 16px;background:var(--surface2);border-radius:10px;font-size:13px;color:var(--muted);">
+        💡 試合登録後、「試合一覧」から選手の成績を入力できます
+      </div>
+    </div>
+  </div>
+
+  <!-- 選手一覧 -->
+  <div class="panel" id="panel-register">
+    <div class="form-card" style="margin-bottom:20px;">
+      <div class="form-title">選手を追加</div>
+      <div class="player-add-row">
+        <select id="reg-number" style="width:80px;"></select>
+        <input type="text" id="reg-name" placeholder="氏名" style="flex:1;">
+        <select id="reg-pos">
+          <option>投手</option><option>捕手</option><option>内野手</option><option>外野手</option>
+        </select>
+        <button class="btn btn-primary" onclick="addPlayer()">追加</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>背番号</th><th style="text-align:left;">氏名</th><th>位置</th><th>操作</th></tr></thead>
+        <tbody id="player-list-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// --- Supabase ---
+const SUPABASE_URL = 'https://zorxexynepvbaajblsfm.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvcnhleHluZXB2YmFhamJsc2ZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM5OTQ0MzgsImV4cCI6MjA4OTU3MDQzOH0.0C62pn7B1qiLXbLoqdEY5CXD8mn8Nb8K_RI8qL5VFGQ';
+
+// seiryo専用テーブルID（playersテーブルのrow id=10, gamesテーブルのrow id=11を使用）
+const SEIRYO_PLAYERS_ROW = 1;
+const SEIRYO_GAMES_ROW   = 2;
+
+const sb = {
+  async get(table, rowId) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${rowId}&select=*`, {
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+    });
+    const data = await res.json();
+    return data && data[0] ? data[0].data : null;
+  },
+  async upsert(table, rowId, data) {
+    // まず存在確認
+    const check = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${rowId}&select=id`, {
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+    });
+    const existing = await check.json();
+    if (existing && existing.length > 0) {
+      await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${rowId}`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ data })
+      });
+    } else {
+      await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify({ id: rowId, data })
+      });
+    }
+  }
+};
+
+const CORRECT_PASSWORD = 'kzy5598';
+
+let players = [];
+let games = [];
+let openGameId = null;
+let _isLoaded = false;
+
+function checkPassword() {
+  const input = document.getElementById('pw-input').value.trim();
+  if (input === CORRECT_PASSWORD) {
+    sessionStorage.setItem('bs_auth', '1');
+    document.getElementById('lock-screen').style.display = 'none';
+    document.getElementById('app-content').style.display = 'block';
+    document.getElementById('pw-error').style.display = 'none';
+    loadFromSupabase();
+  } else {
+    document.getElementById('pw-error').style.display = 'block';
+  }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  ['game-score-us','game-score-them','reg-number'].forEach(id => {
+    document.getElementById(id).innerHTML = numOpts(0);
+  });
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('game-date').value = today;
+  if (sessionStorage.getItem('bs_auth') === '1') {
+    document.getElementById('lock-screen').style.display = 'none';
+    document.getElementById('app-content').style.display = 'block';
+    loadFromSupabase();
+  }
+});
+
+async function loadFromSupabase() {
+  showToast('データを読み込み中...');
+  _isLoaded = false;
+  try {
+    const [p, g] = await Promise.all([
+      sb.get('players', SEIRYO_PLAYERS_ROW),
+      sb.get('games', SEIRYO_GAMES_ROW)
+    ]);
+    players = p || [];
+    games   = g || [];
+    _isLoaded = true;
+    renderAll();
+    showToast('読み込み完了！');
+  } catch(e) {
+    console.error(e);
+    showToast('読み込みエラー');
+  }
+}
+
+async function saveToSupabase() {
+  try {
+    await Promise.all([
+      sb.upsert('players', SEIRYO_PLAYERS_ROW, players),
+      sb.upsert('games',   SEIRYO_GAMES_ROW,   games)
+    ]);
+  } catch(e) {
+    console.error(e);
+    showToast('保存エラーが発生しました');
+  }
+}
+
+function renderAll() {
+  renderStats();
+  renderGames();
+  renderPlayerList();
+}
+
+function calcStats(p) {
+  let pa=0, rbi=0, sb=0, sba=0;
+  let h1=0, h2=0, h3=0, hr=0, bb=0, ibb=0, hbp=0, sac=0, sf=0, k=0, nonAB=0;
+  games.forEach(g => {
+    const s = g.stats && g.stats.find(st => st.pid === p.id);
+    if (!s) return;
+    pa  += s.pa  || 0;
+    rbi += s.rbi || 0;
+    sb  += s.sb  || 0;
+    sba += s.sba || 0;
+    (s.details || []).forEach(d => {
+      switch(d.res) {
+        case '単打': case 'ヒット':           h1++;  break;
+        case '二塁打':                         h2++;  break;
+        case '三塁打':                         h3++;  break;
+        case '本塁打':                         hr++;  break;
+        case '四球':                           bb++;  break;
+        case '敬遠':                           ibb++; break;
+        case '死球':                           hbp++; break;
+        case '犠打':                           sac++; break;
+        case '犠飛':                           sf++;  break;
+        case '三振': case '見逃し三振':
+        case '空振り三振': case '振り逃げ':   k++;   break;
+        case '打撃妨害': case '走塁妨害':     nonAB++; break;
+      }
+    });
+  });
+  const h  = h1 + h2 + h3 + hr;
+  const ab = pa - bb - ibb - hbp - sac - sf - nonAB;
+  const tb = h1 + 2*h2 + 3*h3 + 4*hr;
+  const f  = (v, d=3) => v === null ? '---' : v.toFixed(d).replace(/^0(\.)/, '$1');
+  const avg  = ab > 0 ? h/ab : null;
+  const obp  = (ab+bb+hbp+sf) > 0 ? (h+bb+hbp)/(ab+bb+hbp+sf) : null;
+  const slg  = ab > 0 ? tb/ab : null;
+  const ops  = (obp!==null && slg!==null) ? obp+slg : null;
+  const iso  = (slg!==null && avg!==null) ? slg-avg : null;
+  const wDen = pa - ibb - sac;
+  const woba = wDen > 0 ? (0.69*bb+0.72*hbp+0.88*h1+1.26*h2+1.60*h3+2.07*hr)/wDen : null;
+  const bbk  = k > 0 ? bb/k : null;
+  const sbpct = sba > 0 ? sb/sba : null;
+  return {
+    ab, h, hr, rbi, sb,
+    avg: f(avg), obp: f(obp), slg: f(slg),
+    ops: ops !== null ? ops.toFixed(3) : '---',
+    iso: f(iso), woba: f(woba),
+    bbk:   bbk   !== null ? bbk.toFixed(2) : '---',
+    sbpct: sbpct !== null ? (sbpct*100).toFixed(1)+'%' : '---'
+  };
+}
+
+function toggleAdvStats(pid) {
+  document.getElementById(`adv-${pid}`).classList.toggle('open');
+}
+
+function renderStats() {
+  const rows = players.map(p => {
+    const s = calcStats(p);
+    return `
+    <tr>
+      <td style="text-align:left;"><span class="player-num">${p.number}</span>${p.name}</td>
+      <td style="font-family:'Bebas Neue';font-size:18px;color:var(--accent)">${s.avg}</td>
+      <td>${s.ab}</td><td>${s.h}</td><td>${s.rbi}</td><td>${s.hr}</td><td>${s.sb}</td>
+      <td><button class="btn btn-outline" style="padding:3px 8px;font-size:11px;" onclick="toggleAdvStats('${p.id}')">詳細</button></td>
+    </tr>
+    <tr class="adv-row" id="adv-${p.id}">
+      <td colspan="8" style="padding:10px 14px;background:var(--surface2);">
+        <div style="display:flex;flex-wrap:wrap;gap:14px;font-size:13px;">
+          <span style="color:var(--muted)">OPS <b style="color:var(--text)">${s.ops}</b></span>
+          <span style="color:var(--muted)">出塁率 <b style="color:var(--text)">${s.obp}</b></span>
+          <span style="color:var(--muted)">長打率 <b style="color:var(--text)">${s.slg}</b></span>
+          <span style="color:var(--muted)">wOBA <b style="color:var(--text)">${s.woba}</b></span>
+          <span style="color:var(--muted)">BB/K <b style="color:var(--text)">${s.bbk}</b></span>
+          <span style="color:var(--muted)">ISO <b style="color:var(--text)">${s.iso}</b></span>
+          <span style="color:var(--muted)">SB% <b style="color:var(--text)">${s.sbpct}</b></span>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+  document.getElementById('overview-cards').innerHTML = `
+    <div class="stat-card"><div class="label">試合数</div><div class="value">${games.length}</div></div>
+    <div class="stat-card"><div class="label">登録選手</div><div class="value">${players.length}</div></div>
+  `;
+  document.getElementById('stats-tbody').innerHTML = rows || '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--muted);">データがありません</td></tr>';
+}
+
+function renderGames() {
+  const wrap = document.getElementById('game-list-wrap');
+  const sorted = [...games].reverse();
+  if (!sorted.length) {
+    wrap.innerHTML = '<p style="text-align:center;padding:40px;color:var(--muted);">試合データがありません</p>';
+    return;
+  }
+  wrap.innerHTML = sorted.map(g => {
+    const scoreClass = g.us < g.them ? 'lose' : '';
+    const hasStats = g.stats && g.stats.some(s => s.pa > 0 || s.rbi > 0 || (s.details && s.details.length > 0));
+    return `
+    <div class="game-card" id="gcard-${g.id}">
+      <div class="game-card-header">
+        <div class="game-info">
+          <div class="date">${g.date} <span class="type-badge">${g.type||'公式戦'}</span></div>
+          <div class="opponent">vs ${g.opponent}</div>
+          ${getCompletionBadge(g)}
+        </div>
+        <div class="game-score ${scoreClass}">${g.us} - ${g.them}</div>
+        <div class="game-actions">
+          <button class="btn btn-outline btn-sm" onclick="toggleStatsPanel(${g.id})">
+            ${hasStats ? '✏️ 成績編集' : '📝 成績入力'}
+          </button>
+          <button class="btn btn-danger btn-sm" onclick="deleteGame(${g.id})">削除</button>
+        </div>
+      </div>
+      <div class="stats-panel ${openGameId === g.id ? 'open' : ''}" id="spanel-${g.id}">
+        ${buildStatsPanel(g)}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function numOpts(val) {
+  let s = '';
+  for (let i = 0; i <= 99; i++) s += `<option${i == val ? ' selected' : ''}>${i}</option>`;
+  return s;
+}
+
+const DIRS = ['-','投','捕','一','二','三','遊','左','左中','中','右中','右'];
+const RES_NODIR = ['四球','死球','見逃し三振','空振り三振','振り逃げ','敬遠','打撃妨害','走塁妨害'];
+const RES_DIR   = ['ゴロ','ライナー','フライ','ファールライナー','ファールフライ','単打','二塁打','三塁打','本塁打','犠打','犠飛','エラー','フィルダースチョイス','併殺打'];
+
+function dirOpts(val='') {
+  return `<option value="">-- 方向 --</option>` + DIRS.map(d => `<option value="${d}"${d===val?' selected':''}>${d}</option>`).join('');
+}
+
+function resOptsForDir(dir, val='') {
+  if (!dir) return '<option value="">-- 方向を先に選択 --</option>';
+  const list = dir === '-' ? RES_NODIR : RES_DIR;
+  return `<option value="">-- 結果 --</option>` + list.map(r => `<option value="${r}"${r===val?' selected':''}>${r}</option>`).join('');
+}
+
+function updateResOpts(dirEl) {
+  const resEl = dirEl.closest('.detail-row').querySelector('.d-res');
+  resEl.innerHTML = resOptsForDir(dirEl.value, '');
+}
+
+function getDetailsFromDOM(gid, pid) {
+  const wrap = document.getElementById(`dwrap-${gid}-${pid}`);
+  if (!wrap) return [];
+  return Array.from(wrap.querySelectorAll('.detail-row')).map(row => ({
+    dir: row.querySelector('.d-dir').value,
+    res: row.querySelector('.d-res').value
+  }));
+}
+
+function makeDetailRowHTML(gid, pid, idx, dir='', res='') {
+  return `<span class="detail-num">${idx}</span>
+    <select class="ps-input d-dir" style="width:80px;" onchange="updateResOpts(this)">${dirOpts(dir)}</select>
+    <select class="ps-input d-res" style="flex:1;">${resOptsForDir(dir, res)}</select>
+    <button onclick="removeDetailRow(this,'${gid}','${pid}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:0 4px;">×</button>`;
+}
+
+function removeDetailRow(btn, gid, pid) {
+  btn.closest('.detail-row').remove();
+  renumDetail(gid, pid);
+  const paEl = document.getElementById(`ps-pa-${gid}-${pid}`);
+  if (paEl) paEl.value = Math.max(0, parseInt(paEl.value || 0) - 1);
+}
+
+function addDetailRowSilent(gid, pid) {
+  const wrap = document.getElementById(`dwrap-${gid}-${pid}`);
+  const div  = document.createElement('div');
+  div.className = 'detail-row';
+  div.innerHTML = makeDetailRowHTML(gid, pid, wrap.children.length + 1);
+  wrap.appendChild(div);
+}
+
+function addDetailRow(gid, pid) {
+  addDetailRowSilent(gid, pid);
+  const paEl = document.getElementById(`ps-pa-${gid}-${pid}`);
+  if (paEl) paEl.value = Math.min(99, parseInt(paEl.value || 0) + 1);
+}
+
+function renumDetail(gid, pid) {
+  const wrap = document.getElementById(`dwrap-${gid}-${pid}`);
+  Array.from(wrap.children).forEach((row, i) => {
+    const n = row.querySelector('.detail-num');
+    if (n) n.textContent = i + 1;
+  });
+}
+
+function syncDetailRows(gid, pid) {
+  const pa   = parseInt(document.getElementById(`ps-pa-${gid}-${pid}`)?.value || 0);
+  const wrap = document.getElementById(`dwrap-${gid}-${pid}`);
+  if (!wrap) return;
+  const cur  = wrap.children.length;
+  if (pa > cur) {
+    for (let i = cur; i < pa; i++) addDetailRowSilent(gid, pid);
+  } else if (pa < cur) {
+    while (wrap.children.length > pa) wrap.lastChild.remove();
+    renumDetail(gid, pid);
+  }
+}
+
+function toggleDetail(gid, pid) {
+  const sec = document.getElementById(`dsec-${gid}-${pid}`);
+  if (!sec.classList.contains('open')) syncDetailRows(gid, pid);
+  sec.classList.toggle('open');
+}
+
+function getCompletionBadge(g) {
+  const hasStats = g.stats && g.stats.some(s => s.pa > 0 || s.rbi > 0);
+  const withPA   = hasStats ? g.stats.filter(s => s.pa > 0) : [];
+  const detailDone = withPA.length > 0 && withPA.every(s =>
+    s.details && s.details.length >= s.pa && s.details.every(d => d.dir && d.res)
+  );
+  const step = detailDone ? 3 : hasStats ? 2 : 1;
+  const labels = ['', '試合のみ', '成績入力済', '詳細完了'];
+  const colors = ['', 'var(--muted)', 'var(--accent)', '#22c55e'];
+  const bar = (n) => `<span style="display:inline-block;width:18px;height:4px;border-radius:2px;margin-right:2px;background:${step >= n ? colors[step] : 'rgba(107,122,153,0.25)'}"></span>`;
+  return `<div style="display:flex;align-items:center;gap:5px;margin-top:5px;">
+    <div>${bar(1)}${bar(2)}${bar(3)}</div>
+    <span style="font-size:10px;color:${colors[step]}">${labels[step]}</span>
+  </div>`;
+}
+
+function buildStatsPanel(g) {
+  if (!players.length) return '<p style="color:var(--muted);font-size:13px;">先に選手を登録してください</p>';
+  const sorted = [...players].sort((a,b) => a.number - b.number);
+  const rows = sorted.map(p => {
+    const s = g.stats && g.stats.find(st => st.pid === p.id);
+    const pa  = s ? s.pa  : 0;
+    const rbi = s ? s.rbi : 0;
+    const run = s ? s.run : 0;
+    const sb  = s ? s.sb  : 0;
+    const sba = s ? s.sba : 0;
+    const details = s ? (s.details || []) : [];
+    const detailRows = details.map((d, i) =>
+      `<div class="detail-row">${makeDetailRowHTML(g.id, p.id, i+1, d.dir, d.res)}</div>`
+    ).join('');
+    return `
+      <div class="ps-player-card">
+        <div class="ps-card-top">
+          <div class="ps-name"><span class="ps-num">${p.number}</span>${p.name}</div>
+          <button class="btn btn-outline" style="padding:5px 10px;font-size:11px;"
+            onclick="toggleDetail('${g.id}','${p.id}')">⚾ 打席詳細</button>
+        </div>
+        <div class="ps-card-stats">
+          <div class="ps-stat"><label>打席</label><select class="ps-input" id="ps-pa-${g.id}-${p.id}" onchange="syncDetailRows('${g.id}','${p.id}')">${numOpts(pa)}</select></div>
+          <div class="ps-stat"><label>打点</label><select class="ps-input" id="ps-rbi-${g.id}-${p.id}">${numOpts(rbi)}</select></div>
+          <div class="ps-stat"><label>得点</label><select class="ps-input" id="ps-run-${g.id}-${p.id}">${numOpts(run)}</select></div>
+          <div class="ps-stat"><label>盗塁</label><select class="ps-input" id="ps-sb-${g.id}-${p.id}">${numOpts(sb)}</select></div>
+          <div class="ps-stat"><label>企図</label><select class="ps-input" id="ps-sba-${g.id}-${p.id}">${numOpts(sba)}</select></div>
+        </div>
+        <div class="detail-section${details.length ? ' open' : ''}" id="dsec-${g.id}-${p.id}">
+          <div id="dwrap-${g.id}-${p.id}">${detailRows}</div>
+          <button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="addDetailRow('${g.id}','${p.id}')">＋ 打席を追加</button>
+        </div>
+      </div>`;
+  }).join('');
+  return `
+    <div class="stats-panel-title">選手成績</div>
+    <div class="player-stats-grid">
+      ${rows}
+    </div>
+    <div style="font-size:12px;color:var(--muted);padding:10px 4px 0;margin-top:8px;border-top:1px solid var(--border);">
+      ⚾ 「打席詳細」ボタンから打席詳細を入力すると、打率・OPS・wOBA などを自動計算できます
+    </div>
+    <div class="stats-save-row">
+      <button class="btn btn-outline btn-sm" onclick="toggleStatsPanel(${g.id})">閉じる</button>
+      <button class="btn btn-primary btn-sm" onclick="saveStats(${g.id})">保存する</button>
+    </div>`;
+}
+
+function toggleStatsPanel(gid) {
+  if (openGameId === gid) {
+    openGameId = null;
+    const panel = document.getElementById(`spanel-${gid}`);
+    if (panel) panel.classList.remove('open');
+  } else {
+    if (openGameId !== null) {
+      const prev = document.getElementById(`spanel-${openGameId}`);
+      if (prev) prev.classList.remove('open');
+    }
+    openGameId = gid;
+    const panel = document.getElementById(`spanel-${gid}`);
+    if (panel) {
+      panel.classList.add('open');
+      setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
+    }
+  }
+}
+
+async function saveStats(gid) {
+  const g = games.find(x => x.id === gid);
+  if (!g) return;
+  if (!g.stats) g.stats = [];
+  players.forEach(p => {
+    const pa      = parseInt(document.getElementById(`ps-pa-${gid}-${p.id}`)?.value  || 0);
+    const rbi     = parseInt(document.getElementById(`ps-rbi-${gid}-${p.id}`)?.value || 0);
+    const run     = parseInt(document.getElementById(`ps-run-${gid}-${p.id}`)?.value || 0);
+    const sb      = parseInt(document.getElementById(`ps-sb-${gid}-${p.id}`)?.value  || 0);
+    const sba     = parseInt(document.getElementById(`ps-sba-${gid}-${p.id}`)?.value || 0);
+    const details = getDetailsFromDOM(gid, p.id);
+    const idx = g.stats.findIndex(s => s.pid === p.id);
+    if (idx >= 0) {
+      g.stats[idx] = { ...g.stats[idx], pa, rbi, run, sb, sba, details };
+    } else {
+      g.stats.push({ pid: p.id, pa, rbi, run, sb, sba, details });
+    }
+  });
+  await saveToSupabase();
+  openGameId = null;
+  renderAll();
+  showToast('成績を保存しました');
+}
+
+async function saveGame() {
+  if (!_isLoaded) { showToast('読み込み中です。少し待ってください'); return; }
+  const opponent = document.getElementById('game-opponent').value;
+  if (!opponent) { alert('対戦相手を入力してください'); return; }
+  const g = {
+    id: Date.now(),
+    season: document.getElementById('game-season').value,
+    type: document.getElementById('game-type').value,
+    date: document.getElementById('game-date').value,
+    opponent,
+    us: parseInt(document.getElementById('game-score-us').value || 0),
+    them: parseInt(document.getElementById('game-score-them').value || 0),
+    stats: []
+  };
+  games.push(g);
+  await saveToSupabase();
+  openGameId = g.id;
+  renderAll();
+  switchTab('games');
+  showToast('試合を登録しました　→ 成績を入力してください');
+}
+
+async function deleteGame(id) {
+  if (!confirm('試合データを削除しますか？')) return;
+  games = games.filter(g => g.id !== id);
+  if (openGameId === id) openGameId = null;
+  await saveToSupabase();
+  renderAll();
+}
+
+function renderPlayerList() {
+  const sorted = [...players].sort((a,b) => a.number - b.number);
+  document.getElementById('player-list-tbody').innerHTML = sorted.map(p => `
+    <tr id="row-${p.id}">
+      <td>${p.number}</td>
+      <td style="text-align:left;">${p.name}</td>
+      <td><span class="badge">${p.pos}</span></td>
+      <td style="display:flex;gap:5px;justify-content:center;">
+        <button class="btn btn-outline" style="padding:4px 10px;font-size:11px;" onclick="editPlayerMode(${p.id})">編集</button>
+        <button class="btn btn-danger" style="padding:4px 10px;font-size:11px;" onclick="deletePlayer(${p.id})">削除</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function editPlayerMode(id) {
+  const p = players.find(x => x.id === id);
+  document.getElementById(`row-${id}`).innerHTML = `
+    <td><input type="number" id="edit-num-${id}" value="${p.number}" style="width:50px;background:#000;color:white;border:1px solid #333;text-align:center;padding:4px;border-radius:4px;"></td>
+    <td><input type="text" id="edit-name-${id}" value="${p.name}" style="width:100%;background:#000;color:white;border:1px solid #333;padding:4px;border-radius:4px;"></td>
+    <td>
+      <select id="edit-pos-${id}" style="background:#000;color:white;border:1px solid #333;padding:4px;border-radius:4px;">
+        <option ${p.pos==='投手'?'selected':''}>投手</option>
+        <option ${p.pos==='捕手'?'selected':''}>捕手</option>
+        <option ${p.pos==='内野手'?'selected':''}>内野手</option>
+        <option ${p.pos==='外野手'?'selected':''}>外野手</option>
+      </select>
+    </td>
+    <td style="display:flex;gap:5px;justify-content:center;">
+      <button class="btn btn-primary" style="padding:4px 10px;font-size:11px;" onclick="updatePlayer(${id})">保存</button>
+      <button class="btn btn-outline" style="padding:4px 10px;font-size:11px;" onclick="renderPlayerList()">取消</button>
+    </td>`;
+}
+
+async function updatePlayer(id) {
+  const p = players.find(x => x.id === id);
+  p.number = document.getElementById(`edit-num-${id}`).value;
+  p.name   = document.getElementById(`edit-name-${id}`).value;
+  p.pos    = document.getElementById(`edit-pos-${id}`).value;
+  await saveToSupabase();
+  renderAll();
+  showToast('選手情報を更新しました');
+}
+
+async function addPlayer() {
+  if (!_isLoaded) { showToast('読み込み中です。少し待ってください'); return; }
+  const num  = document.getElementById('reg-number').value;
+  const name = document.getElementById('reg-name').value.trim();
+  const pos  = document.getElementById('reg-pos').value;
+  if (!name) return;
+  players.push({ id: Date.now(), number: num, name, pos });
+  await saveToSupabase();
+  document.getElementById('reg-name').value = '';
+  document.getElementById('reg-number').value = '';
+  renderAll();
+  showToast('選手を追加しました');
+}
+
+async function deletePlayer(id) {
+  if (!confirm('選手を削除しますか？')) return;
+  players = players.filter(p => p.id !== id);
+  await saveToSupabase();
+  renderAll();
+}
+
+function switchTab(name) {
+  const names = ['stats','register','games','add'];
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', names[i]===name));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById(`panel-${name}`).classList.add('active');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = '✓ ' + msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+</script>
+</div>
+</body>
+</html>
