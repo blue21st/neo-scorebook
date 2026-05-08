@@ -18,12 +18,15 @@
     --red: #ef4444;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  input, select, textarea { font-size: 16px !important; }
+  input, select, textarea { font-size: 16px !important; touch-action: manipulation; }
+  button { touch-action: manipulation; }
   body { background: var(--bg); color: var(--text); font-family: 'Noto Sans JP', sans-serif; min-height: 100vh; }
   header {
     background: var(--surface); border-bottom: 1px solid var(--border);
     padding: 0 24px; display: flex; align-items: center; height: 60px;
     position: sticky; top: 0; z-index: 100;
+    -webkit-transform: translateZ(0); transform: translateZ(0);
+    will-change: transform;
   }
   .logo { font-family: 'Bebas Neue', sans-serif; font-size: 28px; letter-spacing: 3px; color: var(--accent); }
   .logo span { color: var(--text); }
@@ -117,6 +120,8 @@
     position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
     background: var(--surface); border-top: 1px solid var(--border);
     height: 60px; padding-bottom: env(safe-area-inset-bottom);
+    -webkit-transform: translateZ(0); transform: translateZ(0);
+    will-change: transform;
   }
   .bottom-nav-inner { display: flex; height: 60px; }
   .bottom-nav-btn {
