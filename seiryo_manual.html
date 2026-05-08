@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>取扱説明書 - BALLSTATS SEIRYO</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e1a; --surface: #111827; --surface2: #1a2235;
+    --accent: #e8c840; --text: #f0f4ff; --muted: #6b7a99;
+    --border: rgba(255,255,255,0.08); --green: #22c55e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Noto Sans JP', sans-serif; line-height: 1.7; }
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; height: 60px; position: sticky; top: 0; z-index: 100; }
+  .logo { font-family: 'Bebas Neue', sans-serif; font-size: 28px; letter-spacing: 3px; color: var(--accent); }
+  .logo span { color: var(--text); }
+  .logo-sub { font-size: 12px; color: var(--muted); margin-left: 16px; letter-spacing: 1px; }
+
+  .main { max-width: 800px; margin: 0 auto; padding: 40px 16px 80px; }
+
+  /* TOC */
+  .toc { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 24px 28px; margin-bottom: 40px; }
+  .toc-title { font-family: 'Bebas Neue', sans-serif; font-size: 20px; color: var(--accent); letter-spacing: 2px; margin-bottom: 14px; }
+  .toc ol { padding-left: 20px; }
+  .toc li { margin-bottom: 6px; }
+  .toc a { color: var(--muted); text-decoration: none; font-size: 14px; transition: color 0.2s; }
+  .toc a:hover { color: var(--accent); }
+
+  /* Sections */
+  .section { margin-bottom: 48px; }
+  .section-title { font-family: 'Bebas Neue', sans-serif; font-size: 28px; color: var(--accent); letter-spacing: 2px; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+  .section-num { font-size: 14px; background: var(--accent); color: #000; border-radius: 50%; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; }
+
+  .sub-title { font-size: 15px; font-weight: 700; color: var(--text); margin: 20px 0 8px; }
+
+  p { font-size: 14px; color: var(--muted); margin-bottom: 12px; }
+  p b { color: var(--text); }
+
+  /* Steps */
+  .steps { display: flex; flex-direction: column; gap: 10px; }
+  .step { display: flex; gap: 14px; align-items: flex-start; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .step-num { font-family: 'Bebas Neue', sans-serif; font-size: 22px; color: var(--accent); min-width: 24px; line-height: 1; margin-top: 2px; }
+  .step-body { font-size: 14px; color: var(--muted); }
+  .step-body b { color: var(--text); display: block; margin-bottom: 3px; font-size: 14px; }
+
+  /* Info box */
+  .info-box { background: var(--surface2); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; padding: 12px 16px; margin: 12px 0; font-size: 13px; color: var(--muted); }
+  .info-box b { color: var(--text); }
+
+  /* Stats table */
+  .stats-table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 12px 0; }
+  .stats-table th { background: var(--surface2); padding: 10px 12px; text-align: left; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--border); }
+  .stats-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--muted); vertical-align: top; }
+  .stats-table td:first-child { color: var(--accent); font-weight: 700; white-space: nowrap; }
+  .stats-table tr:last-child td { border-bottom: none; }
+
+  /* Progress bar example */
+  .progress-demo { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
+  .progress-row { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; }
+  .bar-wrap { display: flex; gap: 3px; }
+  .bar-seg { width: 20px; height: 5px; border-radius: 3px; }
+  .bar-on-g { background: var(--green); }
+  .bar-on-y { background: var(--accent); }
+  .bar-off  { background: rgba(107,122,153,0.25); }
+  .bar-label { font-size: 12px; }
+
+  /* Badge */
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+  .badge-muted  { background: rgba(107,122,153,0.15); color: var(--muted); }
+  .badge-yellow { background: rgba(232,200,64,0.15); color: var(--accent); }
+  .badge-green  { background: rgba(34,197,94,0.15); color: var(--green); }
+
+  /* Result tags */
+  .tag { display: inline-block; background: var(--surface2); color: var(--muted); border-radius: 4px; padding: 2px 8px; font-size: 12px; margin: 2px; }
+
+  /* Warning */
+  .warn-box { background: rgba(239,68,68,0.08); border-left: 3px solid #ef4444; border-radius: 0 8px 8px 0; padding: 12px 16px; margin: 12px 0; font-size: 13px; color: var(--muted); }
+  .warn-box b { color: #ef4444; }
+
+  @media (max-width: 600px) {
+    .main { padding: 24px 12px 60px; }
+    .section-title { font-size: 22px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">⚾ BALL<span>STATS</span> SEIRYO</div>
+  <span class="logo-sub">取扱説明書</span>
+</header>
+
+<div class="main">
+
+  <!-- TOC -->
+  <div class="toc">
+    <div class="toc-title">目次</div>
+    <ol>
+      <li><a href="#s2">選手の登録</a></li>
+      <li><a href="#s3">試合の登録</a></li>
+      <li><a href="#s4">成績の入力（打席・打点・得点・盗塁）</a></li>
+      <li><a href="#s5">打席詳細の入力</a></li>
+      <li><a href="#s6">成績一覧の見方</a></li>
+      <li><a href="#s7">入力状態の確認（プログレスバー）</a></li>
+      <li><a href="#s8">成績指標の説明</a></li>
+    </ol>
+  </div>
+
+  <!-- 2. 選手登録 -->
+  <div class="section" id="s2">
+    <div class="section-title"><span class="section-num">2</span>選手の登録</div>
+    <p>「<b>選手一覧</b>」タブから選手を登録します。成績を入力する前に、必ず先に選手を登録してください。</p>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><div class="step-body"><b>「選手一覧」タブを開く</b>画面上部のタブから選択します。</div></div>
+      <div class="step"><div class="step-num">2</div><div class="step-body"><b>背番号・氏名・ポジションを入力</b>プルダウンから 0〜99 の背番号を選び、氏名を入力してポジションを選択します。</div></div>
+      <div class="step"><div class="step-num">3</div><div class="step-body"><b>「追加」ボタンを押す</b>自動的にGoogleスプレッドシートに保存されます。</div></div>
+    </div>
+    <div class="sub-title">選手の編集・削除</div>
+    <p>選手一覧の各行の「<b>編集</b>」ボタンで背番号・氏名・ポジションを変更できます。「<b>削除</b>」ボタンで削除できます（確認ダイアログが表示されます）。</p>
+    <div class="warn-box"><b>注意：</b>選手を削除すると、その選手に紐づく成績データも参照されなくなります。削除は慎重に行ってください。</div>
+  </div>
+
+  <!-- 3. 試合登録 -->
+  <div class="section" id="s3">
+    <div class="section-title"><span class="section-num">3</span>試合の登録</div>
+    <p>「<b>試合追加</b>」タブから試合を登録します。</p>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><div class="step-body"><b>各項目を入力する</b>年度・種別（公式戦/練習試合）・試合日・対戦相手・自軍得点・敵軍得点をそれぞれ入力します。</div></div>
+      <div class="step"><div class="step-num">2</div><div class="step-body"><b>「試合を登録する」ボタンを押す</b>自動的に「試合一覧」タブへ移動します。</div></div>
+      <div class="step"><div class="step-num">3</div><div class="step-body"><b>続けて成績を入力する</b>登録した試合の「成績入力」ボタンが表示されるので、そのまま成績入力に進めます。</div></div>
+    </div>
+  </div>
+
+  <!-- 4. 成績入力 -->
+  <div class="section" id="s4">
+    <div class="section-title"><span class="section-num">4</span>成績の入力</div>
+    <p>「<b>試合一覧</b>」タブで各試合の「<b>📝 成績入力</b>」ボタンを押すと、選手ごとの成績入力パネルが開きます。</p>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><div class="step-body"><b>各選手の数値を選択する</b>打席 / 打点 / 得点 / 盗塁 / 盗塁企図（総試図数）をプルダウン（0〜99）で入力します。</div></div>
+      <div class="step"><div class="step-num">2</div><div class="step-body"><b>「保存する」ボタンを押す</b>全選手のデータが一括でスプレッドシートに保存されます。保存後パネルは自動で閉じます。</div></div>
+    </div>
+    <div class="info-box">
+      <b>各項目の定義：</b><br>
+      <b>打席：</b>その試合でその選手が打席に立った回数<br>
+      <b>打点：</b>その打席で走者を生還させた点数の合計<br>
+      <b>得点：</b>その選手自身が本塁に生還した回数<br>
+      <b>盗塁：</b>成功した盗塁の数<br>
+      <b>盗塁企図：</b>盗塁を試みた回数（成功＋失敗）
+    </div>
+  </div>
+
+  <!-- 5. 打席詳細 -->
+  <div class="section" id="s5">
+    <div class="section-title"><span class="section-num">5</span>打席詳細の入力</div>
+    <p>打席詳細を入力すると、<b>打率・OPS・wOBAなどの成績指標が自動計算</b>されます。</p>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><div class="step-body"><b>「打席」ボタンを押す</b>成績入力パネルで各選手行の右端にある「打席」ボタンを押すと、打席詳細の入力欄が開きます。打席数に応じて入力欄が自動的に追加されます。</div></div>
+      <div class="step"><div class="step-num">2</div><div class="step-body"><b>打球方向を選択する</b>ボールが飛んだ方向を選択します。三振・四球・死球など打球が発生しない場合は「<b>−（なし）</b>」を選択します。</div></div>
+      <div class="step"><div class="step-num">3</div><div class="step-body"><b>結果を選択する</b>打球方向に応じて選択肢が変わります（下記参照）。</div></div>
+      <div class="step"><div class="step-num">4</div><div class="step-body"><b>「保存する」ボタンを押す</b>全選手の詳細が保存されます。未入力の行がある場合はアラートが表示され保存できません。</div></div>
+    </div>
+
+    <div class="sub-title">打球方向の選択肢</div>
+    <p>
+      <span class="tag">−（なし）</span>
+      <span class="tag">投</span><span class="tag">捕</span><span class="tag">一</span><span class="tag">二</span>
+      <span class="tag">三</span><span class="tag">遊</span><span class="tag">左</span><span class="tag">左中</span>
+      <span class="tag">中</span><span class="tag">右中</span><span class="tag">右</span>
+    </p>
+
+    <div class="sub-title">結果の選択肢（方向が「−」の場合）</div>
+    <p>
+      <span class="tag">四球</span><span class="tag">死球</span><span class="tag">見逃し三振</span>
+      <span class="tag">空振り三振</span><span class="tag">振り逃げ</span><span class="tag">敬遠</span>
+      <span class="tag">打撃妨害</span><span class="tag">走塁妨害</span>
+    </p>
+
+    <div class="sub-title">結果の選択肢（方向が選択された場合）</div>
+    <p>
+      <span class="tag">ゴロ</span><span class="tag">ライナー</span><span class="tag">フライ</span>
+      <span class="tag">ファールライナー</span><span class="tag">ファールフライ</span>
+      <span class="tag">単打</span><span class="tag">二塁打</span><span class="tag">三塁打</span><span class="tag">本塁打</span>
+      <span class="tag">犠打</span><span class="tag">犠飛</span><span class="tag">エラー</span>
+      <span class="tag">フィルダースチョイス</span><span class="tag">併殺打</span>
+    </p>
+
+    <div class="info-box">💡 <b>打席追加ボタン：</b>「＋ 打席追加」ボタンを押すと1打席分の入力欄が追加され、打席数も自動で増えます。逆に「−」ボタンで行を削除すると打席数も自動で減ります。</div>
+  </div>
+
+  <!-- 6. 成績一覧 -->
+  <div class="section" id="s6">
+    <div class="section-title"><span class="section-num">6</span>成績一覧の見方</div>
+    <p>「<b>成績一覧</b>」タブに全試合の累計成績が自動計算されて表示されます。</p>
+
+    <div class="sub-title">基本成績（常時表示）</div>
+    <table class="stats-table">
+      <thead><tr><th>項目</th><th>説明</th></tr></thead>
+      <tbody>
+        <tr><td>打率</td><td>安打 ÷ 打数（打席詳細から自動計算）</td></tr>
+        <tr><td>打数</td><td>打席 − 四球 − 死球 − 犠打 − 犠飛 − 敬遠 − 打撃妨害 − 走塁妨害</td></tr>
+        <tr><td>安打</td><td>単打＋二塁打＋三塁打＋本塁打</td></tr>
+        <tr><td>打点</td><td>各試合で手入力した打点の合計</td></tr>
+        <tr><td>本塁打</td><td>打席詳細から自動カウント</td></tr>
+        <tr><td>盗塁</td><td>各試合で手入力した盗塁の合計</td></tr>
+      </tbody>
+    </table>
+
+    <div class="sub-title">詳細成績（「詳細」ボタンで展開）</div>
+    <p>各選手行の右端「<b>詳細</b>」ボタンを押すと高度な指標が表示されます（打席詳細を入力している選手のみ意味のある数値が表示されます）。</p>
+    <table class="stats-table">
+      <thead><tr><th>指標</th><th>説明</th></tr></thead>
+      <tbody>
+        <tr><td>OPS</td><td>出塁率 ＋ 長打率。1.000以上が超一流の目安</td></tr>
+        <tr><td>出塁率</td><td>（安打＋四球＋死球）÷（打数＋四球＋死球＋犠飛）</td></tr>
+        <tr><td>長打率</td><td>塁打数 ÷ 打数（塁打 = 単打×1＋二塁打×2＋三塁打×3＋本塁打×4）</td></tr>
+        <tr><td>wOBA</td><td>各結果に重みをつけた得点貢献度の指標（MLB 2023係数使用）</td></tr>
+        <tr><td>BB/K</td><td>四球 ÷ 三振。選球眼の良さを示す（高いほど良い）</td></tr>
+        <tr><td>ISO</td><td>長打率 − 打率。純粋な長打力を示す</td></tr>
+        <tr><td>SB%</td><td>盗塁成功率 = 盗塁 ÷ 盗塁企図</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 7. プログレスバー -->
+  <div class="section" id="s7">
+    <div class="section-title"><span class="section-num">7</span>入力状態の確認</div>
+    <p>「試合一覧」の各試合カードに、入力の進捗を示すプログレスバーが表示されます。</p>
+    <div class="progress-demo">
+      <div class="progress-row">
+        <div class="bar-wrap">
+          <div class="bar-seg bar-on-y"></div>
+          <div class="bar-seg bar-off"></div>
+          <div class="bar-seg bar-off"></div>
+        </div>
+        <span class="bar-label" style="color:var(--muted);font-size:13px;">試合のみ — スコアのみ登録済。成績はまだ未入力。</span>
+      </div>
+      <div class="progress-row">
+        <div class="bar-wrap">
+          <div class="bar-seg bar-on-y"></div>
+          <div class="bar-seg bar-on-y"></div>
+          <div class="bar-seg bar-off"></div>
+        </div>
+        <span class="bar-label" style="color:var(--accent);font-size:13px;">成績入力済 — 打席・打点・得点・盗塁を入力済。打席詳細がまだ。</span>
+      </div>
+      <div class="progress-row">
+        <div class="bar-wrap">
+          <div class="bar-seg bar-on-g"></div>
+          <div class="bar-seg bar-on-g"></div>
+          <div class="bar-seg bar-on-g"></div>
+        </div>
+        <span class="bar-label" style="color:var(--green);font-size:13px;">詳細完了 — 全選手の打席詳細まで入力完了。全指標を自動計算中。</span>
+      </div>
+    </div>
+    <div class="info-box">⚾ 全試合を「詳細完了」にすると、成績一覧に打率・OPS・wOBAなど全指標が正確に表示されます。</div>
+  </div>
+
+  <!-- 8. 成績指標 -->
+  <div class="section" id="s8">
+    <div class="section-title"><span class="section-num">8</span>成績指標の説明</div>
+
+    <div class="sub-title">wOBA（Weighted On-Base Average）</div>
+    <p>各打席結果に「得点への貢献度」で重みをつけた指標です。打率よりも実際の得点力を正確に表します。</p>
+    <table class="stats-table">
+      <thead><tr><th>結果</th><th>係数</th><th>説明</th></tr></thead>
+      <tbody>
+        <tr><td>四球</td><td>0.69</td><td>最低限の出塁</td></tr>
+        <tr><td>死球</td><td>0.72</td><td>四球よりわずかに高い</td></tr>
+        <tr><td>単打</td><td>0.88</td><td>通常の1塁打</td></tr>
+        <tr><td>二塁打</td><td>1.26</td><td>長打の価値</td></tr>
+        <tr><td>三塁打</td><td>1.60</td><td>より高い得点貢献</td></tr>
+        <tr><td>本塁打</td><td>2.07</td><td>最高の得点貢献</td></tr>
+      </tbody>
+    </table>
+    <p>※ 敬遠は分母から除外。MLB 2023シーズンの標準係数を使用しています。</p>
+
+    <div class="sub-title">打数（AB）の計算</div>
+    <p>以下の結果は<b>打数に含まれません</b>（打席数から除外）：</p>
+    <p>
+      <span class="tag">四球</span><span class="tag">死球</span><span class="tag">敬遠</span>
+      <span class="tag">犠打</span><span class="tag">犠飛</span>
+      <span class="tag">打撃妨害</span><span class="tag">走塁妨害</span>
+    </p>
+    <p>上記以外（ゴロ・フライ・単打・三振・振り逃げ・エラーなど）はすべて<b>打数に含まれます</b>。</p>
+  </div>
+
+
+</div>
+</body>
+</html>
