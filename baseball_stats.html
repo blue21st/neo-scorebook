@@ -288,15 +288,15 @@
     <div class="form-card">
       <div class="form-title">試合を追加</div>
       <div class="form-grid">
-        <div class="form-group"><label>年度</label><select id="game-season">${[...Array(16)].map((_,i)=>`<option value="${2020+i}"${2020+i===2026?' selected':''}>${2020+i}年</option>`).join('')}</select></div>
+        <div class="form-group"><label>年度</label><select id="game-season"></select></div>
         <div class="form-group"><label>種別</label><select id="game-type"><option>公式戦</option><option>練習試合</option></select></div>
         <div class="form-group" style="grid-column:1/-1;"><label>大会名（任意）</label>
           <input type="text" id="game-tournament" placeholder="例：春季大会" list="tournament-list" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
         </div>
         <div class="form-group"><label>試合日</label><input type="date" id="game-date"></div>
         <div class="form-group"><label>対戦相手</label><input type="text" id="game-opponent" placeholder="○○チーム" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></div>
-        <div class="form-group"><label>自軍得点</label><select id="game-score-us">${[...Array(21)].map((_,i)=>`<option value="${i}">${i}</option>`).join('')}</select></div>
-        <div class="form-group"><label>敵軍得点</label><select id="game-score-them">${[...Array(21)].map((_,i)=>`<option value="${i}">${i}</option>`).join('')}</select></div>
+        <div class="form-group"><label>自軍得点</label><select id="game-score-us"></select></div>
+        <div class="form-group"><label>敵軍得点</label><select id="game-score-them"></select></div>
       </div>
       <div style="margin-top:20px;text-align:right;">
         <button class="btn btn-primary" onclick="saveGame()">試合を登録する</button>
@@ -312,7 +312,7 @@
     <div class="form-card" style="margin-bottom:20px;">
       <div class="form-title">選手を追加</div>
       <div class="player-add-row">
-        <select id="reg-number" style="width:80px;"><option value="">番号</option>${[...Array(100)].map((_,i)=>`<option value="${i}">${i}</option>`).join('')}</select>
+        <select id="reg-number" style="width:80px;"></select>
         <input type="text" id="reg-name" placeholder="氏名" style="flex:1;" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
         <select id="reg-pos">
           <option>投手</option><option>捕手</option><option>内野手</option><option>外野手</option>
@@ -422,6 +422,25 @@ function checkPassword() {
 window.addEventListener('DOMContentLoaded', () => {
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('game-date').value = today;
+
+  // 年度セレクト (2020〜2035)
+  const curYear = new Date().getFullYear();
+  document.getElementById('game-season').innerHTML =
+    [...Array(16)].map((_,i) => {
+      const y = 2020 + i;
+      return `<option value="${y}"${y === curYear ? ' selected' : ''}>${y}年</option>`;
+    }).join('');
+
+  // 得点セレクト (0〜20)
+  const scoreOpts = [...Array(21)].map((_,i) => `<option value="${i}">${i}</option>`).join('');
+  document.getElementById('game-score-us').innerHTML = scoreOpts;
+  document.getElementById('game-score-them').innerHTML = scoreOpts;
+
+  // 背番号セレクト (0〜99)
+  document.getElementById('reg-number').innerHTML =
+    '<option value="">番号</option>' +
+    [...Array(100)].map((_,i) => `<option value="${i}">${i}</option>`).join('');
+
   if (sessionStorage.getItem('bs_auth') === '1') {
     document.getElementById('lock-screen').style.display = 'none';
     document.getElementById('app-content').style.display = 'block';
