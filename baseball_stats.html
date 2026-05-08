@@ -680,24 +680,7 @@ function renderGames() {
           </button>
         </div>
       </div>
-      <div class="stats-panel" id="gedit-${g.id}" style="display:none;padding:16px 20px;">
-        <div style="font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:12px;">試合情報を編集</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
-          <div class="form-group"><label>試合日</label><input type="date" id="gedit-date-${g.id}" value="${g.date}" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:14px;outline:none;width:100%;"></div>
-          <div class="form-group"><label>種別</label><select id="gedit-type-${g.id}" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:14px;outline:none;width:100%;"><option${(g.type||'公式戦')==='公式戦'?' selected':''}>公式戦</option><option${(g.type||'')==='練習試合'?' selected':''}>練習試合</option></select></div>
-          <div class="form-group" style="grid-column:1/-1;"><label>大会名（任意）</label><input type="text" id="gedit-tournament-${g.id}" value="${g.tournament||''}" list="tournament-list" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:14px;outline:none;width:100%;"></div>
-          <div class="form-group" style="grid-column:1/-1;"><label>対戦相手</label><input type="text" id="gedit-opponent-${g.id}" value="${g.opponent}" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:14px;outline:none;width:100%;"></div>
-          <div class="form-group"><label>自軍得点</label><input type="number" id="gedit-us-${g.id}" value="${g.us||0}" min="0" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:14px;outline:none;width:100%;"></div>
-          <div class="form-group"><label>敵軍得点</label><input type="number" id="gedit-them-${g.id}" value="${g.them||0}" min="0" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:14px;outline:none;width:100%;"></div>
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <button class="btn btn-danger" onclick="deleteGame(${g.id})">削除</button>
-          <div style="display:flex;gap:8px;">
-            <button class="btn btn-outline btn-sm" onclick="toggleGameEdit(${g.id})">キャンセル</button>
-            <button class="btn btn-primary btn-sm" onclick="saveGameEdit(${g.id})">保存</button>
-          </div>
-        </div>
-      </div>
+      <div class="stats-panel" id="gedit-${g.id}" style="display:none;padding:16px 20px;"></div>
       <div class="stats-panel ${openGameId === g.id ? 'open' : ''}" id="spanel-${g.id}">
         ${openGameId === g.id ? buildStatsPanel(g) : ''}
       </div>
@@ -705,11 +688,38 @@ function renderGames() {
   }).join('');
 }
 
+function buildGameEditPanel(g) {
+  return `
+    <div style="font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:12px;">試合情報を編集</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+      <div class="form-group"><label>試合日</label><input type="date" id="gedit-date-${g.id}" value="${g.date}" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:16px;outline:none;width:100%;"></div>
+      <div class="form-group"><label>種別</label><select id="gedit-type-${g.id}" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:16px;outline:none;width:100%;"><option${(g.type||'公式戦')==='公式戦'?' selected':''}>公式戦</option><option${(g.type||'')==='練習試合'?' selected':''}>練習試合</option></select></div>
+      <div class="form-group" style="grid-column:1/-1;"><label>大会名（任意）</label><input type="text" id="gedit-tournament-${g.id}" value="${g.tournament||''}" list="tournament-list" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:16px;outline:none;width:100%;"></div>
+      <div class="form-group" style="grid-column:1/-1;"><label>対戦相手</label><input type="text" id="gedit-opponent-${g.id}" value="${g.opponent}" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:16px;outline:none;width:100%;"></div>
+      <div class="form-group"><label>自軍得点</label><input type="number" id="gedit-us-${g.id}" value="${g.us||0}" min="0" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:16px;outline:none;width:100%;"></div>
+      <div class="form-group"><label>敵軍得点</label><input type="number" id="gedit-them-${g.id}" value="${g.them||0}" min="0" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:16px;outline:none;width:100%;"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <button class="btn btn-danger" onclick="deleteGame(${g.id})">削除</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-outline btn-sm" onclick="toggleGameEdit(${g.id})">キャンセル</button>
+        <button class="btn btn-primary btn-sm" onclick="saveGameEdit(${g.id})">保存</button>
+      </div>
+    </div>`;
+}
+
 function toggleGameEdit(gid) {
   const panel = document.getElementById(`gedit-${gid}`);
   if (!panel) return;
   const isOpen = panel.style.display === 'block';
-  panel.style.display = isOpen ? 'none' : 'block';
+  if (isOpen) {
+    panel.style.display = 'none';
+    panel.innerHTML = '';
+  } else {
+    const g = games.find(x => x.id === gid);
+    if (g) panel.innerHTML = buildGameEditPanel(g);
+    panel.style.display = 'block';
+  }
 }
 
 async function saveGameEdit(gid) {
