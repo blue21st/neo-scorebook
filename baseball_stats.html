@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>野球成績管理 - BALLSTATS</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
@@ -18,15 +18,11 @@
     --red: #ef4444;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  input, select, textarea { font-size: 16px !important; touch-action: manipulation; }
-  button { touch-action: manipulation; }
   body { background: var(--bg); color: var(--text); font-family: 'Noto Sans JP', sans-serif; min-height: 100vh; }
   header {
     background: var(--surface); border-bottom: 1px solid var(--border);
     padding: 0 24px; display: flex; align-items: center; height: 60px;
     position: sticky; top: 0; z-index: 100;
-    -webkit-transform: translateZ(0); transform: translateZ(0);
-    will-change: transform;
   }
   .logo { font-family: 'Bebas Neue', sans-serif; font-size: 28px; letter-spacing: 3px; color: var(--accent); }
   .logo span { color: var(--text); }
@@ -68,7 +64,7 @@
   .form-group input, .form-group select {
     background: var(--bg); border: 1px solid var(--border);
     border-radius: 8px; padding: 10px 12px; color: var(--text);
-    font-family: 'Noto Sans JP', sans-serif; font-size: 16px; outline: none;
+    font-family: 'Noto Sans JP', sans-serif; font-size: 14px; outline: none;
   }
   .btn { padding: 10px 22px; border-radius: 8px; border: none; cursor: pointer; font-family: 'Noto Sans JP', sans-serif; font-weight: 700; font-size: 14px; transition: all 0.2s; }
   .btn-primary { background: var(--accent); color: #000; }
@@ -101,7 +97,7 @@
   .ps-card-stats { display: flex; gap: 6px; }
   .ps-stat { display: flex; flex-direction: column; align-items: center; flex: 1; gap: 4px; }
   .ps-stat label { font-size: 10px; color: var(--muted); letter-spacing: 0.5px; white-space: nowrap; }
-  .ps-input { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 2px; color: var(--text); font-size: 16px; text-align: center; outline: none; font-family: 'Noto Sans JP', sans-serif; }
+  .ps-input { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 2px; color: var(--text); font-size: 14px; text-align: center; outline: none; font-family: 'Noto Sans JP', sans-serif; }
   .ps-input:focus { border-color: var(--accent); }
   .stats-save-row { display: flex; justify-content: flex-end; margin-top: 16px; gap: 8px; }
   .detail-section { display: none; padding: 10px 0 4px; border-top: 1px solid var(--border); margin-top: 10px; }
@@ -120,8 +116,6 @@
     position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
     background: var(--surface); border-top: 1px solid var(--border);
     height: 60px; padding-bottom: env(safe-area-inset-bottom);
-    -webkit-transform: translateZ(0); transform: translateZ(0);
-    will-change: transform;
   }
   .bottom-nav-inner { display: flex; height: 60px; }
   .bottom-nav-btn {
@@ -133,35 +127,22 @@
   .bottom-nav-btn .nav-icon { font-size: 20px; line-height: 1; }
 
   @media (max-width: 600px) {
-    /* ヘッダー */
     header { height: 52px; padding: 0 16px; }
     .logo { font-size: 22px; }
-
-    /* メイン */
-    .main { padding: 12px 10px 76px; /* ボトムナビ分の余白 */ }
-
-    /* タブを非表示→ボトムナビで代替 */
+    .main { padding: 12px 10px 76px; }
     .tabs { display: none; }
     .bottom-nav { display: block; }
-
-    /* 成績一覧テーブル */
     .table-wrap { border-radius: 10px; }
     table { font-size: 12px; }
     th { padding: 8px 6px; font-size: 9px; letter-spacing: 0.5px; }
     td { padding: 10px 6px; font-size: 12px; }
     .player-num { font-size: 16px; width: 28px; margin-right: 6px; }
-
-    /* 成績カード */
     .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 16px; }
     .stat-card { padding: 12px 10px; }
     .stat-card .value { font-size: 28px; }
     .stat-card .label { font-size: 10px; }
-
-    /* フィルター */
     .filter-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
     .filter-row select { font-size: 12px; padding: 6px 8px; flex: 1; min-width: 80px; }
-
-    /* 試合カード */
     .game-card { border-radius: 10px; margin-bottom: 10px; }
     .game-card-header { padding: 12px 14px; gap: 8px; }
     .game-info .date { font-size: 11px; }
@@ -170,8 +151,6 @@
     .game-actions { gap: 4px; }
     .game-actions .btn-sm { padding: 5px 8px; font-size: 11px; }
     .type-badge { font-size: 9px; padding: 2px 5px; }
-
-    /* 成績入力パネル */
     .ps-player-card { padding: 10px 12px; border-radius: 8px; }
     .ps-card-stats { gap: 4px; }
     .ps-stat label { font-size: 9px; }
@@ -179,22 +158,14 @@
     .ps-num { font-size: 16px; }
     .stats-panel { padding: 12px 14px; }
     .stats-panel-title { font-size: 10px; }
-
-    /* フォーム */
     .form-card { padding: 16px; border-radius: 10px; }
     .form-title { font-size: 20px; margin-bottom: 14px; }
     .form-grid { grid-template-columns: 1fr; gap: 10px; }
     .form-group input, .form-group select { padding: 10px; font-size: 15px; }
-
-    /* 選手追加フォーム */
     .player-add-row { gap: 6px; }
     .player-add-row input, .player-add-row select { padding: 10px 8px; font-size: 14px; }
-
-    /* ボタン全般 */
     .btn { font-size: 13px; padding: 9px 16px; }
     .btn-sm { font-size: 11px; padding: 6px 10px; }
-
-    /* 打席詳細行 */
     .detail-row { gap: 4px; }
     .detail-num { font-size: 12px; min-width: 16px; }
   }
@@ -288,15 +259,15 @@
     <div class="form-card">
       <div class="form-title">試合を追加</div>
       <div class="form-grid">
-        <div class="form-group"><label>年度</label><select id="game-season"></select></div>
+        <div class="form-group"><label>年度</label><input type="number" id="game-season" value="2026"></div>
         <div class="form-group"><label>種別</label><select id="game-type"><option>公式戦</option><option>練習試合</option></select></div>
         <div class="form-group" style="grid-column:1/-1;"><label>大会名（任意）</label>
-          <input type="text" id="game-tournament" placeholder="例：春季大会" list="tournament-list" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+          <input type="text" id="game-tournament" placeholder="例：春季大会" list="tournament-list">
         </div>
         <div class="form-group"><label>試合日</label><input type="date" id="game-date"></div>
-        <div class="form-group"><label>対戦相手</label><input type="text" id="game-opponent" placeholder="○○チーム" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></div>
-        <div class="form-group"><label>自軍得点</label><select id="game-score-us"></select></div>
-        <div class="form-group"><label>敵軍得点</label><select id="game-score-them"></select></div>
+        <div class="form-group"><label>対戦相手</label><input type="text" id="game-opponent" placeholder="○○チーム"></div>
+        <div class="form-group"><label>自軍得点</label><input type="number" id="game-score-us" value="0" min="0" max="99" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:inherit;font-size:14px;outline:none;width:100%;"></div>
+        <div class="form-group"><label>敵軍得点</label><input type="number" id="game-score-them" value="0" min="0" max="99" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:inherit;font-size:14px;outline:none;width:100%;"></div>
       </div>
       <div style="margin-top:20px;text-align:right;">
         <button class="btn btn-primary" onclick="saveGame()">試合を登録する</button>
@@ -312,8 +283,8 @@
     <div class="form-card" style="margin-bottom:20px;">
       <div class="form-title">選手を追加</div>
       <div class="player-add-row">
-        <select id="reg-number" style="width:80px;"></select>
-        <input type="text" id="reg-name" placeholder="氏名" style="flex:1;" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+        <input type="number" id="reg-number" placeholder="背番号" min="0" max="99" style="width:80px;">
+        <input type="text" id="reg-name" placeholder="氏名" style="flex:1;">
         <select id="reg-pos">
           <option>投手</option><option>捕手</option><option>内野手</option><option>外野手</option>
         </select>
@@ -354,7 +325,6 @@
 const SUPABASE_URL = 'https://zorxexynepvbaajblsfm.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvcnhleHluZXB2YmFhamJsc2ZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM5OTQ0MzgsImV4cCI6MjA4OTU3MDQzOH0.0C62pn7B1qiLXbLoqdEY5CXD8mn8Nb8K_RI8qL5VFGQ';
 
-// seiryo専用テーブルID（playersテーブルのrow id=10, gamesテーブルのrow id=11を使用）
 const SEIRYO_PLAYERS_ROW = 4;
 const SEIRYO_GAMES_ROW   = 2;
 
@@ -367,7 +337,6 @@ const sb = {
     return data && data[0] ? data[0].data : null;
   },
   async upsert(table, rowId, data) {
-    // まず存在確認
     const check = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${rowId}&select=id`, {
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
     });
@@ -397,7 +366,7 @@ const sb = {
   }
 };
 
-const CORRECT_PASSWORD = 'kzy';
+const CORRECT_PASSWORD = 'kzy5598';
 
 let players = [];
 let games = [];
@@ -422,25 +391,6 @@ function checkPassword() {
 window.addEventListener('DOMContentLoaded', () => {
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('game-date').value = today;
-
-  // 年度セレクト (2020〜2035)
-  const curYear = new Date().getFullYear();
-  document.getElementById('game-season').innerHTML =
-    [...Array(16)].map((_,i) => {
-      const y = 2020 + i;
-      return `<option value="${y}"${y === curYear ? ' selected' : ''}>${y}年</option>`;
-    }).join('');
-
-  // 得点セレクト (0〜20)
-  const scoreOpts = [...Array(21)].map((_,i) => `<option value="${i}">${i}</option>`).join('');
-  document.getElementById('game-score-us').innerHTML = scoreOpts;
-  document.getElementById('game-score-them').innerHTML = scoreOpts;
-
-  // 背番号セレクト (0〜99)
-  document.getElementById('reg-number').innerHTML =
-    '<option value="">番号</option>' +
-    [...Array(100)].map((_,i) => `<option value="${i}">${i}</option>`).join('');
-
   if (sessionStorage.getItem('bs_auth') === '1') {
     document.getElementById('lock-screen').style.display = 'none';
     document.getElementById('app-content').style.display = 'block';
@@ -482,7 +432,6 @@ async function saveToSupabase() {
 function renderAll() {
   renderStats();
   renderGames();
-  // 選手一覧は入力中でなければ更新する
   const nameInput = document.getElementById('reg-name');
   const focused = document.activeElement;
   if (!nameInput || focused !== nameInput) {
@@ -551,7 +500,6 @@ function sortStats(key) {
 }
 
 function renderStats() {
-  // フィルターセレクト更新
   const seasons = [...new Set(games.map(g => g.season || String(new Date(g.date).getFullYear())))].sort((a,b) => b-a);
   const tournaments = [...new Set(games.map(g => g.tournament).filter(Boolean))].sort();
   const fSeason = document.getElementById('filter-season');
@@ -569,7 +517,6 @@ function renderStats() {
   if (selType)   filteredGames = filteredGames.filter(g => (g.type||'公式戦')===selType);
   if (selTour)   filteredGames = filteredGames.filter(g => (g.tournament||'')===selTour);
 
-  // チーム成績
   let teamAB=0,teamH=0,teamRBI=0,teamSB=0,teamUs=0,teamThem=0;
   filteredGames.forEach(g => {
     teamUs+=g.us||0; teamThem+=g.them||0;
@@ -593,7 +540,6 @@ function renderStats() {
     <div class="stat-card"><div class="label">総失点</div><div class="value" style="color:var(--red);">${teamThem}</div></div>
   `;
 
-  // 選手成績（フィルター済み試合で計算）
   function calcFiltered(p) {
     let pa=0,rbi=0,sb=0,sba=0,h1=0,h2=0,h3=0,hr=0,bb=0,ibb=0,hbp=0,sac=0,sf=0,k=0,nonAB=0;
     filteredGames.forEach(g => {
@@ -652,7 +598,6 @@ function renderStats() {
 function renderGames() {
   const wrap = document.getElementById('game-list-wrap');
 
-  // フィルターセレクト更新
   const seasons = [...new Set(games.map(g => g.season || String(new Date(g.date).getFullYear())))].sort((a,b) => b-a);
   const tournaments = [...new Set(games.map(g => g.tournament).filter(Boolean))].sort();
   const gfSeason = document.getElementById('gfilter-season');
@@ -660,7 +605,6 @@ function renderGames() {
   if (gfSeason) { const cv=gfSeason.value; gfSeason.innerHTML='<option value="">全年度</option>'+seasons.map(s=>`<option value="${s}"${s===cv?' selected':''}>${s}年</option>`).join(''); }
   if (gfTour)   { const cv=gfTour.value;   gfTour.innerHTML='<option value="">全大会</option>'+tournaments.map(t=>`<option value="${t}"${t===cv?' selected':''}>${t}</option>`).join(''); }
 
-  // datalist（大会名補完）更新
   const dl = document.getElementById('tournament-list');
   if (dl) dl.innerHTML = tournaments.map(t => `<option value="${t}">`).join('');
 
@@ -668,7 +612,6 @@ function renderGames() {
   const selType   = document.getElementById('gfilter-type')?.value || '';
   const selTour   = gfTour?.value || '';
 
-  // フィルター＋日付降順ソート
   let filtered = [...games];
   if (selSeason) filtered = filtered.filter(g => (g.season||String(new Date(g.date).getFullYear()))===selSeason);
   if (selType)   filtered = filtered.filter(g => (g.type||'公式戦')===selType);
@@ -699,46 +642,36 @@ function renderGames() {
           </button>
         </div>
       </div>
-      <div class="stats-panel" id="gedit-${g.id}" style="display:none;padding:16px 20px;"></div>
+      <div class="stats-panel" id="gedit-${g.id}" style="display:none;padding:16px 20px;">
+        <div style="font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:12px;">試合情報を編集</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+          <div class="form-group"><label>試合日</label><input type="date" id="gedit-date-${g.id}" value="${g.date}" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:14px;outline:none;width:100%;"></div>
+          <div class="form-group"><label>種別</label><select id="gedit-type-${g.id}" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:14px;outline:none;width:100%;"><option${(g.type||'公式戦')==='公式戦'?' selected':''}>公式戦</option><option${(g.type||'')==='練習試合'?' selected':''}>練習試合</option></select></div>
+          <div class="form-group" style="grid-column:1/-1;"><label>大会名（任意）</label><input type="text" id="gedit-tournament-${g.id}" value="${g.tournament||''}" list="tournament-list" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:14px;outline:none;width:100%;"></div>
+          <div class="form-group" style="grid-column:1/-1;"><label>対戦相手</label><input type="text" id="gedit-opponent-${g.id}" value="${g.opponent}" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:14px;outline:none;width:100%;"></div>
+          <div class="form-group"><label>自軍得点</label><input type="number" id="gedit-us-${g.id}" value="${g.us||0}" min="0" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:14px;outline:none;width:100%;"></div>
+          <div class="form-group"><label>敵軍得点</label><input type="number" id="gedit-them-${g.id}" value="${g.them||0}" min="0" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:14px;outline:none;width:100%;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <button class="btn btn-danger" onclick="deleteGame(${g.id})">削除</button>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-outline btn-sm" onclick="toggleGameEdit(${g.id})">キャンセル</button>
+            <button class="btn btn-primary btn-sm" onclick="saveGameEdit(${g.id})">保存</button>
+          </div>
+        </div>
+      </div>
       <div class="stats-panel ${openGameId === g.id ? 'open' : ''}" id="spanel-${g.id}">
-        ${openGameId === g.id ? buildStatsPanel(g) : ''}
+        ${buildStatsPanel(g)}
       </div>
     </div>`;
   }).join('');
-}
-
-function buildGameEditPanel(g) {
-  return `
-    <div style="font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:12px;">試合情報を編集</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
-      <div class="form-group"><label>試合日</label><input type="date" id="gedit-date-${g.id}" value="${g.date}" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:16px;outline:none;width:100%;"></div>
-      <div class="form-group"><label>種別</label><select id="gedit-type-${g.id}" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:16px;outline:none;width:100%;"><option${(g.type||'公式戦')==='公式戦'?' selected':''}>公式戦</option><option${(g.type||'')==='練習試合'?' selected':''}>練習試合</option></select></div>
-      <div class="form-group" style="grid-column:1/-1;"><label>大会名（任意）</label><input type="text" id="gedit-tournament-${g.id}" value="${g.tournament||''}" list="tournament-list" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:16px;outline:none;width:100%;"></div>
-      <div class="form-group" style="grid-column:1/-1;"><label>対戦相手</label><input type="text" id="gedit-opponent-${g.id}" value="${g.opponent}" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:16px;outline:none;width:100%;"></div>
-      <div class="form-group"><label>自軍得点</label><select id="gedit-us-${g.id}" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:16px;outline:none;width:100%;">${[...Array(21)].map((_,i)=>`<option value="${i}"${i===(g.us||0)?' selected':''}>${i}</option>`).join('')}</select></div>
-      <div class="form-group"><label>敵軍得点</label><select id="gedit-them-${g.id}" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:16px;outline:none;width:100%;">${[...Array(21)].map((_,i)=>`<option value="${i}"${i===(g.them||0)?' selected':''}>${i}</option>`).join('')}</select></div>
-    </div>
-    <div style="display:flex;justify-content:space-between;align-items:center;">
-      <button class="btn btn-danger" onclick="deleteGame(${g.id})">削除</button>
-      <div style="display:flex;gap:8px;">
-        <button class="btn btn-outline btn-sm" onclick="toggleGameEdit(${g.id})">キャンセル</button>
-        <button class="btn btn-primary btn-sm" onclick="saveGameEdit(${g.id})">保存</button>
-      </div>
-    </div>`;
 }
 
 function toggleGameEdit(gid) {
   const panel = document.getElementById(`gedit-${gid}`);
   if (!panel) return;
   const isOpen = panel.style.display === 'block';
-  if (isOpen) {
-    panel.style.display = 'none';
-    panel.innerHTML = '';
-  } else {
-    const g = games.find(x => x.id === gid);
-    if (g) panel.innerHTML = buildGameEditPanel(g);
-    panel.style.display = 'block';
-  }
+  panel.style.display = isOpen ? 'none' : 'block';
 }
 
 async function saveGameEdit(gid) {
@@ -831,7 +764,7 @@ function renumDetail(gid, pid) {
 function syncDetailRows(gid, pid) {
   const paVal = document.getElementById(`ps-pa-${gid}-${pid}`)?.value;
   const pa = parseInt(paVal);
-  if (isNaN(pa) || pa < 0) return; // 「-」の場合はスキップ
+  if (isNaN(pa) || pa < 0) return;
   const wrap = document.getElementById(`dwrap-${gid}-${pid}`);
   if (!wrap) return;
   const cur = wrap.children.length;
@@ -888,7 +821,6 @@ function buildStatsPanel(g) {
   if (!players.length) return '<p style="color:var(--muted);font-size:13px;">先に選手を登録してください</p>';
   const sorted = [...players].sort((a,b) => Number(a.number) - Number(b.number));
 
-  // 入力完了チェック：全選手のpaが入力済み（-以外）
   const allEntered = g.stats && sorted.every(p => {
     const s = g.stats.find(st => st.pid === p.id);
     return s && s.pa !== null && s.pa !== undefined && s.pa !== -1;
@@ -906,7 +838,6 @@ function buildStatsPanel(g) {
       `<div class="detail-row">${makeDetailRowHTML(g.id, p.id, i+1, d.dir, d.res)}</div>`
     ).join('');
 
-    // 打席数：未入力は「-」表示、入力済みは数値
     const paSelect = `<select class="ps-input" id="ps-pa-${g.id}-${p.id}" onchange="syncDetailRows('${g.id}','${p.id}')">
       <option value="-1"${pa===null?' selected':''}>-</option>
       ${[...Array(21).keys()].map(i=>`<option value="${i}"${pa===i?' selected':''}>${i}</option>`).join('')}
@@ -954,17 +885,15 @@ function toggleStatsPanel(gid) {
   if (openGameId === gid) {
     openGameId = null;
     const panel = document.getElementById(`spanel-${gid}`);
-    if (panel) { panel.classList.remove('open'); panel.innerHTML = ''; }
+    if (panel) panel.classList.remove('open');
   } else {
     if (openGameId !== null) {
       const prev = document.getElementById(`spanel-${openGameId}`);
-      if (prev) { prev.classList.remove('open'); prev.innerHTML = ''; }
+      if (prev) prev.classList.remove('open');
     }
     openGameId = gid;
     const panel = document.getElementById(`spanel-${gid}`);
-    const g = games.find(x => x.id === gid);
-    if (panel && g) {
-      panel.innerHTML = buildStatsPanel(g);
+    if (panel) {
       panel.classList.add('open');
       setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
     }
@@ -1098,12 +1027,10 @@ function switchTab(name) {
   document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', names[i]===name));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById(`panel-${name}`).classList.add('active');
-  // ボトムナビ更新
   names.forEach(n => {
     const btn = document.getElementById(`bnav-${n}`);
     if (btn) btn.classList.toggle('active', n === name);
   });
-  // ページトップへ
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
