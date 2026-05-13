@@ -241,6 +241,12 @@ td { padding: 10px 6px; font-size: 12px; }
       <select id="filter-tournament" onchange="renderStats()" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 12px;color:var(--text);font-family:inherit;font-size:13px;outline:none;">
         <option value="">全大会</option>
       </select>
+      <select id="filter-recent" onchange="renderStats()" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 12px;color:var(--text);font-family:inherit;font-size:13px;outline:none;">
+        <option value="">全試合</option>
+        <option value="3">最近3試合</option>
+        <option value="5">最近5試合</option>
+        <option value="10">最近10試合</option>
+      </select>
     </div>
     <div class="stats-grid" id="overview-cards"></div>
     <div class="table-wrap">
@@ -249,11 +255,16 @@ td { padding: 10px 6px; font-size: 12px; }
           <tr>
             <th style="text-align:left;cursor:pointer;" onclick="sortStats('number')">選手 ↕</th>
             <th style="cursor:pointer;" onclick="sortStats('avg')">打率 ↕</th>
+            <th style="cursor:pointer;" onclick="sortStats('pa')">打席 ↕</th>
             <th style="cursor:pointer;" onclick="sortStats('ab')">打数 ↕</th>
             <th style="cursor:pointer;" onclick="sortStats('h')">安打 ↕</th>
             <th style="cursor:pointer;" onclick="sortStats('rbi')">打点 ↕</th>
             <th style="cursor:pointer;" onclick="sortStats('hr')">本塁打 ↕</th>
             <th style="cursor:pointer;" onclick="sortStats('sb')">盗塁 ↕</th>
+            <th style="cursor:pointer;" onclick="sortStats('bb')">四球 ↕</th>
+            <th style="cursor:pointer;" onclick="sortStats('hbp')">死球 ↕</th>
+            <th style="cursor:pointer;" onclick="sortStats('obp')">出塁率 ↕</th>
+            <th style="cursor:pointer;" onclick="sortStats('ops')">OPS ↕</th>
             <th></th>
           </tr>
         </thead>
@@ -552,6 +563,12 @@ function renderStats() {
   if (selType)   filteredGames = filteredGames.filter(g => (g.type||'公式戦')===selType);
   if (selTour)   filteredGames = filteredGames.filter(g => (g.tournament||'')===selTour);
 
+  const selRecent = document.getElementById('filter-recent')?.value || '';
+  if (selRecent) {
+    const n = parseInt(selRecent);
+    filteredGames = [...filteredGames].sort((a,b) => b.date.localeCompare(a.date)).slice(0, n);
+  }
+
   // チーム成績
   let teamAB=0,teamH=0,teamRBI=0,teamSB=0,teamUs=0,teamThem=0;
   filteredGames.forEach(g => {
@@ -599,7 +616,7 @@ function renderStats() {
     const iso=(slg!==null&&avg!==null)?slg-avg:null;
     const wDen=pa-ibb-sac, woba=wDen>0?(0.69*bb+0.72*hbp+0.88*h1+1.26*h2+1.60*h3+2.07*hr)/wDen:null;
     const bbk=k>0?bb/k:null, sbpct=sba>0?sb/sba:null;
-    return {pa,ab,h,hr,rbi,sb,avg:f(avg),obp:f(obp),slg:f(slg),ops:ops!==null?ops.toFixed(3):'---',iso:f(iso),woba:f(woba),bbk:bbk!==null?bbk.toFixed(2):'---',sbpct:sbpct!==null?(sbpct*100).toFixed(1)+'%':'---'};
+    return {pa,ab,h,hr,rbi,sb,bb,hbp,avg:f(avg),obp:f(obp),slg:f(slg),ops:ops!==null?ops.toFixed(3):'---',iso:f(iso),woba:f(woba),bbk:bbk!==null?bbk.toFixed(2):'---',sbpct:sbpct!==null?(sbpct*100).toFixed(1)+'%':'---'};
   }
 
   let rows = players.map(p => ({ p, s: calcFiltered(p) }));
@@ -613,14 +630,15 @@ function renderStats() {
     <tr>
       <td style="text-align:left;"><span class="player-num">${p.number}</span>${p.name}</td>
       <td style="font-family:'Bebas Neue';font-size:18px;color:var(--accent)">${s.avg}</td>
-      <td>${s.ab}</td><td>${s.h}</td><td>${s.rbi}</td><td>${s.hr}</td><td>${s.sb}</td>
+      <td>${s.pa}</td><td>${s.ab}</td><td>${s.h}</td><td>${s.rbi}</td><td>${s.hr}</td><td>${s.sb}</td>
+      <td>${s.bb}</td><td>${s.hbp}</td>
+      <td style="font-size:13px;">${s.obp}</td>
+      <td style="font-size:13px;">${s.ops}</td>
       <td><button class="btn btn-outline" style="padding:3px 8px;font-size:11px;" onclick="toggleAdvStats('${p.id}')">詳細</button></td>
     </tr>
     <tr class="adv-row" id="adv-${p.id}">
-      <td colspan="8" style="padding:10px 14px;background:var(--surface2);">
+      <td colspan="13" style="padding:10px 14px;background:var(--surface2);">
         <div style="display:flex;flex-wrap:wrap;gap:14px;font-size:13px;">
-          <span style="color:var(--muted)">OPS <b style="color:var(--text)">${s.ops}</b></span>
-          <span style="color:var(--muted)">出塁率 <b style="color:var(--text)">${s.obp}</b></span>
           <span style="color:var(--muted)">長打率 <b style="color:var(--text)">${s.slg}</b></span>
           <span style="color:var(--muted)">wOBA <b style="color:var(--text)">${s.woba}</b></span>
           <span style="color:var(--muted)">BB/K <b style="color:var(--text)">${s.bbk}</b></span>
@@ -629,7 +647,7 @@ function renderStats() {
         </div>
       </td>
     </tr>`).join('');
-  document.getElementById('stats-tbody').innerHTML = tbody || '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--muted);">データがありません</td></tr>';
+  document.getElementById('stats-tbody').innerHTML = tbody || '<tr><td colspan="13" style="text-align:center;padding:24px;color:var(--muted);">データがありません</td></tr>';
 }
 
 function renderGames() {
