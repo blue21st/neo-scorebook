@@ -215,7 +215,7 @@ td { padding: 10px 6px; font-size: 12px; }
 <div id="app-content" style="display:none;">
 <header>
   <div class="logo" onclick="loadFromSupabase();switchTab('stats');" style="cursor:pointer;">⚾ BALL<span>STATS</span></div>
-  <div id="app-version" style="margin-left:auto;font-size:11px;color:var(--muted);font-family:monospace;letter-spacing:0.5px;opacity:0.7;">v2026.05.16-c</div>
+  <div id="app-version" style="margin-left:auto;font-size:11px;color:var(--muted);font-family:monospace;letter-spacing:0.5px;opacity:0.7;">v2026.05.16-d</div>
 </header>
 
 <div class="main">
@@ -492,7 +492,7 @@ function calcStats(p) {
   let h1=0, h2=0, h3=0, hr=0, bb=0, ibb=0, hbp=0, sac=0, sf=0, k=0, nonAB=0;
   games.forEach(g => {
     const s = g.stats && g.stats.find(st => st.pid === p.id);
-    if (!s) return;
+    if (!s || s.pa < 0) return;   // pa=-1は未出場フラグなので集計から除外
     pa  += s.pa  || 0;
     rbi += s.rbi || 0;
     sb  += s.sb  || 0;
@@ -577,6 +577,7 @@ function renderStats() {
   filteredGames.forEach(g => {
     teamUs+=g.us||0; teamThem+=g.them||0;
     (g.stats||[]).forEach(s => {
+      if (s.pa < 0) return;   // 未出場フラグはチーム集計からも除外
       teamRBI+=s.rbi||0; teamSB+=s.sb||0;
       (s.details||[]).forEach(d => {
         const r=d.res||'';
@@ -600,7 +601,7 @@ function renderStats() {
   function calcFiltered(p) {
     let pa=0,rbi=0,sb=0,sba=0,h1=0,h2=0,h3=0,hr=0,bb=0,ibb=0,hbp=0,sac=0,sf=0,k=0,nonAB=0;
     filteredGames.forEach(g => {
-      const s=g.stats&&g.stats.find(st=>st.pid===p.id); if(!s) return;
+      const s=g.stats&&g.stats.find(st=>st.pid===p.id); if(!s || s.pa < 0) return;
       pa+=s.pa||0; rbi+=s.rbi||0; sb+=s.sb||0; sba+=s.sba||0;
       (s.details||[]).forEach(d => {
         switch(d.res) {
