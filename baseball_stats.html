@@ -1102,6 +1102,24 @@ function showToast(msg) {
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2500);
 }
+
+// --- IME入力中はdatalistを切り離してSafariのフリーズを回避 ---
+// Safariは日本語の変換中にdatalistのフィルタリングを同時に走らせると固まる挙動があるため、
+// composition中だけlist属性を退避し、確定後に戻す。動的生成のinputにも効くようdocument委譲。
+document.addEventListener('compositionstart', (e) => {
+  const inp = e.target;
+  if (inp && inp.tagName === 'INPUT' && inp.hasAttribute('list')) {
+    inp.dataset.savedList = inp.getAttribute('list');
+    inp.removeAttribute('list');
+  }
+}, true);
+document.addEventListener('compositionend', (e) => {
+  const inp = e.target;
+  if (inp && inp.tagName === 'INPUT' && inp.dataset.savedList) {
+    inp.setAttribute('list', inp.dataset.savedList);
+    delete inp.dataset.savedList;
+  }
+}, true);
 </script>
 
 </div>
