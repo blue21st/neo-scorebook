@@ -215,7 +215,7 @@ td { padding: 10px 6px; font-size: 12px; }
 <div id="app-content" style="display:none;">
 <header>
   <div class="logo" onclick="loadFromSupabase();switchTab('stats');" style="cursor:pointer;">⚾ BALL<span>STATS</span></div>
-  <div id="app-version" style="margin-left:auto;font-size:11px;color:var(--muted);font-family:monospace;letter-spacing:0.5px;opacity:0.7;">v2026.05.16-a</div>
+  <div id="app-version" style="margin-left:auto;font-size:11px;color:var(--muted);font-family:monospace;letter-spacing:0.5px;opacity:0.7;">v2026.05.16-c</div>
 </header>
 
 <div class="main">
@@ -290,7 +290,6 @@ td { padding: 10px 6px; font-size: 12px; }
         <option value="">全大会</option>
       </select>
     </div>
-    <datalist id="tournament-list"></datalist>
     <div id="game-list-wrap"></div>
   </div>
 
@@ -303,7 +302,10 @@ td { padding: 10px 6px; font-size: 12px; }
         <div class="form-group"><label>年度</label><input type="number" id="game-season" value="2026"></div>
         <div class="form-group"><label>種別</label><select id="game-type"><option>公式戦</option><option>練習試合</option></select></div>
         <div class="form-group" style="grid-column:1/-1;"><label>大会名（任意）</label>
-          <input type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="game-tournament" placeholder="例：春季大会" list="tournament-list">
+          <select id="game-tournament-picker" onchange="fillTournament('game-tournament', this)" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:13px;outline:none;width:100%;margin-bottom:6px;">
+            <option value="">-- 過去の大会から選ぶ --</option>
+          </select>
+          <input type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="game-tournament" placeholder="例：春季大会">
         </div>
         <div class="form-group"><label>試合日</label><input type="date" id="game-date"></div>
         <div class="form-group"><label>対戦相手</label><input type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="game-opponent" placeholder="○○チーム"></div>
@@ -662,9 +664,12 @@ function renderGames() {
   if (gfSeason) { const cv=gfSeason.value; gfSeason.innerHTML='<option value="">全年度</option>'+seasons.map(s=>`<option value="${s}"${s===cv?' selected':''}>${s}年</option>`).join(''); }
   if (gfTour)   { const cv=gfTour.value;   gfTour.innerHTML='<option value="">全大会</option>'+tournaments.map(t=>`<option value="${t}"${t===cv?' selected':''}>${t}</option>`).join(''); }
 
-  // datalist（大会名補完）更新
-  const dl = document.getElementById('tournament-list');
-  if (dl) dl.innerHTML = tournaments.map(t => `<option value="${t}">`).join('');
+  // 大会名ピッカー(新規追加フォーム用selectを過去大会で埋める)
+  const tPicker = document.getElementById('game-tournament-picker');
+  if (tPicker) {
+    tPicker.innerHTML = '<option value="">-- 過去の大会から選ぶ --</option>'
+      + tournaments.map(t => `<option value="${t}">${t}</option>`).join('');
+  }
 
   const selSeason = gfSeason?.value || '';
   const selType   = document.getElementById('gfilter-type')?.value || '';
@@ -706,7 +711,13 @@ function renderGames() {
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
           <div class="form-group"><label>試合日</label><input type="date" id="gedit-date-${g.id}" value="${g.date}" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:14px;outline:none;width:100%;"></div>
           <div class="form-group"><label>種別</label><select id="gedit-type-${g.id}" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:14px;outline:none;width:100%;"><option${(g.type||'公式戦')==='公式戦'?' selected':''}>公式戦</option><option${(g.type||'')==='練習試合'?' selected':''}>練習試合</option></select></div>
-          <div class="form-group" style="grid-column:1/-1;"><label>大会名（任意）</label><input type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="gedit-tournament-${g.id}" value="${g.tournament||''}" list="tournament-list" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:14px;outline:none;width:100%;"></div>
+          <div class="form-group" style="grid-column:1/-1;"><label>大会名（任意）</label>
+            <select onchange="fillTournament('gedit-tournament-${g.id}', this)" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:13px;outline:none;width:100%;margin-bottom:6px;">
+              <option value="">-- 過去の大会から選ぶ --</option>
+              ${tournaments.map(t => `<option value="${t}">${t}</option>`).join('')}
+            </select>
+            <input type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="gedit-tournament-${g.id}" value="${g.tournament||''}" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:14px;outline:none;width:100%;">
+          </div>
           <div class="form-group" style="grid-column:1/-1;"><label>対戦相手</label><input type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="gedit-opponent-${g.id}" value="${g.opponent}" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:14px;outline:none;width:100%;"></div>
           <div class="form-group"><label>自軍得点</label><input type="number" id="gedit-us-${g.id}" value="${g.us||0}" min="0" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:14px;outline:none;width:100%;"></div>
           <div class="form-group"><label>敵軍得点</label><input type="number" id="gedit-them-${g.id}" value="${g.them||0}" min="0" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:14px;outline:none;width:100%;"></div>
@@ -1104,23 +1115,16 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 2500);
 }
 
-// --- IME入力中はdatalistを切り離してSafariのフリーズを回避 ---
-// Safariは日本語の変換中にdatalistのフィルタリングを同時に走らせると固まる挙動があるため、
-// composition中だけlist属性を退避し、確定後に戻す。動的生成のinputにも効くようdocument委譲。
-document.addEventListener('compositionstart', (e) => {
-  const inp = e.target;
-  if (inp && inp.tagName === 'INPUT' && inp.hasAttribute('list')) {
-    inp.dataset.savedList = inp.getAttribute('list');
-    inp.removeAttribute('list');
+// 過去大会selectで選んだ値を、隣のテキスト入力欄に流し込む
+function fillTournament(inputId, selectEl) {
+  const inp = document.getElementById(inputId);
+  if (inp && selectEl.value) {
+    inp.value = selectEl.value;
   }
-}, true);
-document.addEventListener('compositionend', (e) => {
-  const inp = e.target;
-  if (inp && inp.tagName === 'INPUT' && inp.dataset.savedList) {
-    inp.setAttribute('list', inp.dataset.savedList);
-    delete inp.dataset.savedList;
-  }
-}, true);
+  // 選んだ後はselectを初期状態に戻す（次回も「過去の大会から選ぶ」と表示）
+  selectEl.value = '';
+}
+
 </script>
 
 </div>
