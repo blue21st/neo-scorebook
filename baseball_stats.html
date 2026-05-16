@@ -215,7 +215,7 @@ td { padding: 10px 6px; font-size: 12px; }
 <div id="app-content" style="display:none;">
 <header>
   <div class="logo" onclick="loadFromSupabase();switchTab('stats');" style="cursor:pointer;">⚾ BALL<span>STATS</span></div>
-  <div id="app-version" style="margin-left:auto;font-size:11px;color:var(--muted);font-family:monospace;letter-spacing:0.5px;opacity:0.7;">v2026.05.16-d</div>
+  <div id="app-version" style="margin-left:auto;font-size:11px;color:var(--muted);font-family:monospace;letter-spacing:0.5px;opacity:0.7;">v2026.05.17</div>
 </header>
 
 <div class="main">
@@ -256,6 +256,8 @@ td { padding: 10px 6px; font-size: 12px; }
           <tr>
             <th style="text-align:left;cursor:pointer;" onclick="sortStats('number')">選手 ↕</th>
             <th style="cursor:pointer;" onclick="sortStats('avg')">打率 ↕</th>
+            <th style="cursor:pointer;" onclick="sortStats('obp')">出塁率 ↕</th>
+            <th style="cursor:pointer;" onclick="sortStats('ops')">OPS ↕</th>
             <th style="cursor:pointer;" onclick="sortStats('pa')">打席 ↕</th>
             <th style="cursor:pointer;" onclick="sortStats('ab')">打数 ↕</th>
             <th style="cursor:pointer;" onclick="sortStats('h')">安打 ↕</th>
@@ -264,8 +266,6 @@ td { padding: 10px 6px; font-size: 12px; }
             <th style="cursor:pointer;" onclick="sortStats('sb')">盗塁 ↕</th>
             <th style="cursor:pointer;" onclick="sortStats('bb')">四球 ↕</th>
             <th style="cursor:pointer;" onclick="sortStats('hbp')">死球 ↕</th>
-            <th style="cursor:pointer;" onclick="sortStats('obp')">出塁率 ↕</th>
-            <th style="cursor:pointer;" onclick="sortStats('ops')">OPS ↕</th>
             <th></th>
           </tr>
         </thead>
@@ -634,10 +634,10 @@ function renderStats() {
     <tr>
       <td style="text-align:left;"><span class="player-num">${p.number}</span>${p.name}</td>
       <td style="font-family:'Bebas Neue';font-size:18px;color:var(--accent)">${s.avg}</td>
+      <td style="font-family:'Bebas Neue';font-size:16px;color:var(--accent)">${s.obp}</td>
+      <td style="font-family:'Bebas Neue';font-size:16px;color:var(--accent)">${s.ops}</td>
       <td>${s.pa}</td><td>${s.ab}</td><td>${s.h}</td><td>${s.rbi}</td><td>${s.hr}</td><td>${s.sb}</td>
       <td>${s.bb}</td><td>${s.hbp}</td>
-      <td style="font-size:13px;">${s.obp}</td>
-      <td style="font-size:13px;">${s.ops}</td>
       <td><button class="btn btn-outline" style="padding:3px 8px;font-size:11px;" onclick="toggleAdvStats('${p.id}')">詳細</button></td>
     </tr>
     <tr class="adv-row" id="adv-${p.id}">
