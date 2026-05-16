@@ -47,6 +47,13 @@ background: transparent; color: var(--muted); transition: all 0.2s;
 .stat-card .value { font-family: 'Bebas Neue', sans-serif; font-size: 36px; color: var(--accent); }
 
 .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+.table-wrap.compact .col-detail { display: none; }
+.table-wrap.detail { overflow-x: auto; }
+.mode-toggle { display: inline-flex; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 3px; margin-left: auto; }
+.mode-toggle button { background: transparent; border: none; color: var(--muted); padding: 6px 14px; font-size: 12px; border-radius: 6px; cursor: pointer; font-family: inherit; transition: all 0.15s; }
+.mode-toggle button.active { background: var(--accent); color: #000; font-weight: 700; }
+.stats-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.stats-toolbar .label { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
 table { width: 100%; border-collapse: collapse; }
 thead { background: var(--surface2); }
 th { padding: 12px 14px; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); text-align: center; font-weight: 500; white-space: nowrap; }
@@ -215,7 +222,7 @@ td { padding: 10px 6px; font-size: 12px; }
 <div id="app-content" style="display:none;">
 <header>
   <div class="logo" onclick="loadFromSupabase();switchTab('stats');" style="cursor:pointer;">⚾ BALL<span>STATS</span></div>
-  <div id="app-version" style="margin-left:auto;font-size:11px;color:var(--muted);font-family:monospace;letter-spacing:0.5px;opacity:0.7;">v2026.05.17</div>
+  <div id="app-version" style="margin-left:auto;font-size:11px;color:var(--muted);font-family:monospace;letter-spacing:0.5px;opacity:0.7;">v2026.05.17-a</div>
 </header>
 
 <div class="main">
@@ -250,7 +257,14 @@ td { padding: 10px 6px; font-size: 12px; }
       </select>
     </div>
     <div class="stats-grid" id="overview-cards"></div>
-    <div class="table-wrap">
+    <div class="stats-toolbar">
+      <span class="label">表示</span>
+      <div class="mode-toggle" id="stats-mode-toggle">
+        <button id="mode-compact" onclick="setStatsMode('compact')">コンパクト</button>
+        <button id="mode-detail" onclick="setStatsMode('detail')">詳細</button>
+      </div>
+    </div>
+    <div class="table-wrap compact" id="stats-table-wrap">
       <table>
         <thead>
           <tr>
@@ -262,10 +276,10 @@ td { padding: 10px 6px; font-size: 12px; }
             <th style="cursor:pointer;" onclick="sortStats('ab')">打数 ↕</th>
             <th style="cursor:pointer;" onclick="sortStats('h')">安打 ↕</th>
             <th style="cursor:pointer;" onclick="sortStats('rbi')">打点 ↕</th>
-            <th style="cursor:pointer;" onclick="sortStats('hr')">本塁打 ↕</th>
-            <th style="cursor:pointer;" onclick="sortStats('sb')">盗塁 ↕</th>
-            <th style="cursor:pointer;" onclick="sortStats('bb')">四球 ↕</th>
-            <th style="cursor:pointer;" onclick="sortStats('hbp')">死球 ↕</th>
+            <th class="col-detail" style="cursor:pointer;" onclick="sortStats('hr')">本塁打 ↕</th>
+            <th class="col-detail" style="cursor:pointer;" onclick="sortStats('sb')">盗塁 ↕</th>
+            <th class="col-detail" style="cursor:pointer;" onclick="sortStats('bb')">四球 ↕</th>
+            <th class="col-detail" style="cursor:pointer;" onclick="sortStats('hbp')">死球 ↕</th>
             <th></th>
           </tr>
         </thead>
@@ -636,8 +650,9 @@ function renderStats() {
       <td style="font-family:'Bebas Neue';font-size:18px;color:var(--accent)">${s.avg}</td>
       <td style="font-family:'Bebas Neue';font-size:16px;color:var(--accent)">${s.obp}</td>
       <td style="font-family:'Bebas Neue';font-size:16px;color:var(--accent)">${s.ops}</td>
-      <td>${s.pa}</td><td>${s.ab}</td><td>${s.h}</td><td>${s.rbi}</td><td>${s.hr}</td><td>${s.sb}</td>
-      <td>${s.bb}</td><td>${s.hbp}</td>
+      <td>${s.pa}</td><td>${s.ab}</td><td>${s.h}</td><td>${s.rbi}</td>
+      <td class="col-detail">${s.hr}</td><td class="col-detail">${s.sb}</td>
+      <td class="col-detail">${s.bb}</td><td class="col-detail">${s.hbp}</td>
       <td><button class="btn btn-outline" style="padding:3px 8px;font-size:11px;" onclick="toggleAdvStats('${p.id}')">詳細</button></td>
     </tr>
     <tr class="adv-row" id="adv-${p.id}">
@@ -1125,6 +1140,27 @@ function fillTournament(inputId, selectEl) {
   // 選んだ後はselectを初期状態に戻す（次回も「過去の大会から選ぶ」と表示）
   selectEl.value = '';
 }
+
+// 成績一覧の表示モード切替（コンパクト=主要列のみ / 詳細=全列）
+function setStatsMode(mode) {
+  const wrap = document.getElementById('stats-table-wrap');
+  if (!wrap) return;
+  wrap.classList.remove('compact','detail');
+  wrap.classList.add(mode);
+  const btnC = document.getElementById('mode-compact');
+  const btnD = document.getElementById('mode-detail');
+  if (btnC && btnD) {
+    btnC.classList.toggle('active', mode === 'compact');
+    btnD.classList.toggle('active', mode === 'detail');
+  }
+  try { localStorage.setItem('statsMode', mode); } catch(e) {}
+}
+// 起動時に保存済みモードを復元（デフォルトはコンパクト）
+(function initStatsMode(){
+  let saved = 'compact';
+  try { saved = localStorage.getItem('statsMode') || 'compact'; } catch(e) {}
+  setStatsMode(saved);
+})();
 
 </script>
 
