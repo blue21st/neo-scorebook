@@ -55,6 +55,24 @@ background: transparent; color: var(--muted); transition: all 0.2s;
 .mode-toggle button.active { background: var(--accent); color: #000; }
 .mode-toggle button svg { display: block; }
 .stats-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+
+/* 選手別試合成績モーダル */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.72); z-index: 500; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.modal-box { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; width: 100%; max-width: 760px; max-height: 86vh; display: flex; flex-direction: column; overflow: hidden; }
+.modal-header { display: flex; align-items: center; gap: 8px; padding: 14px 16px; border-bottom: 1px solid var(--border); background: var(--surface2); }
+.modal-title { flex: 1; text-align: center; font-weight: 700; font-size: 17px; }
+.modal-title .player-num { margin-right: 6px; }
+.modal-nav { background: var(--surface); border: 1px solid var(--border); color: var(--text); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; font-size: 18px; line-height: 1; flex-shrink: 0; }
+.modal-nav:hover { border-color: var(--accent); color: var(--accent); }
+.modal-close { background: transparent; border: none; color: var(--muted); font-size: 24px; cursor: pointer; width: 36px; height: 36px; flex-shrink: 0; }
+.modal-close:hover { color: var(--text); }
+.modal-body { padding: 14px 16px; overflow: auto; }
+.pm-table { overflow-x: auto; }
+.pm-table.compact .col-detail { display: none; }
+.pm-table table { width: 100%; border-collapse: collapse; }
+.pm-table th { padding: 9px 10px; font-size: 10px; letter-spacing: 0.5px; color: var(--muted); text-align: center; font-weight: 500; white-space: nowrap; background: var(--surface2); }
+.pm-table td { padding: 9px 10px; font-size: 13px; text-align: center; border-top: 1px solid var(--border); white-space: nowrap; }
+.pm-table tr.pm-total td { font-weight: 700; border-top: 2px solid var(--accent); background: var(--surface2); }
 table { width: 100%; border-collapse: collapse; }
 thead { background: var(--surface2); }
 th { padding: 12px 14px; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); text-align: center; font-weight: 500; white-space: nowrap; }
@@ -223,7 +241,7 @@ td { padding: 10px 6px; font-size: 12px; }
 <div id="app-content" style="display:none;">
 <header>
   <div class="logo" onclick="loadFromSupabase();switchTab('stats');" style="cursor:pointer;">⚾ BALL<span>STATS</span></div>
-  <div id="app-version" style="margin-left:auto;font-size:11px;color:var(--muted);font-family:monospace;letter-spacing:0.5px;opacity:0.7;">v2026.05.17-b</div>
+  <div id="app-version" style="margin-left:auto;font-size:11px;color:var(--muted);font-family:monospace;letter-spacing:0.5px;opacity:0.7;">v2026.05.21</div>
 </header>
 
 <div class="main">
@@ -378,6 +396,19 @@ td { padding: 10px 6px; font-size: 12px; }
 
 <div class="toast" id="toast"></div>
 
+<!-- 選手別 試合成績モーダル -->
+<div class="modal-overlay" id="player-modal" style="display:none;" onclick="if(event.target===this)closePlayerModal()">
+  <div class="modal-box">
+    <div class="modal-header">
+      <button class="modal-nav" onclick="navPlayer(-1)" title="前の選手">‹</button>
+      <div class="modal-title" id="player-modal-title"></div>
+      <button class="modal-nav" onclick="navPlayer(1)" title="次の選手">›</button>
+      <button class="modal-close" onclick="closePlayerModal()" title="閉じる">×</button>
+    </div>
+    <div class="modal-body" id="player-modal-body"></div>
+  </div>
+</div>
+
 <!-- ボトムナビ（スマホ用） -->
 
 <nav class="bottom-nav">
@@ -453,6 +484,10 @@ let openGameId = null;
 let _isLoaded = false;
 let _sortKey = 'number';
 let _sortDir = 1;
+// 選手別モーダル用の状態
+let _modalPid = null;          // 表示中の選手ID
+let _statsRowOrder = [];       // 成績一覧の現在の表示順（前/次選手ナビ用）
+let _statsFilteredGames = [];  // 成績一覧で適用中のフィルター結果（モーダルでも同じ条件を使う）
 
 function checkPassword() {
   const input = document.getElementById('pw-input').value.trim();
@@ -663,9 +698,13 @@ function renderStats() {
     return (va-vb)*_sortDir;
   });
 
+  // 選手別モーダル用に「表示順」と「フィルター結果」を保存
+  _statsRowOrder = rows.map(r => r.p.id);
+  _statsFilteredGames = filteredGames;
+
   const tbody = rows.map(({p,s}) => `
     <tr>
-      <td style="text-align:left;"><span class="player-num">${p.number}</span>${p.name}</td>
+      <td style="text-align:left;cursor:pointer;" onclick="openPlayerModal(${p.id})" title="試合別成績を見る"><span class="player-num">${p.number}</span>${p.name}</td>
       <td style="font-family:'Bebas Neue';font-size:18px;color:var(--accent)">${s.avg}</td>
       <td style="font-family:'Bebas Neue';font-size:16px;color:var(--accent)">${s.obp}</td>
       <td style="font-family:'Bebas Neue';font-size:16px;color:var(--accent)">${s.ops}</td>
@@ -1188,6 +1227,115 @@ function setStatsMode(mode) {
   try { saved = localStorage.getItem('statsMode') || 'compact'; } catch(e) {}
   setStatsMode(saved);
 })();
+
+// ===== 選手別 試合成績モーダル =====
+// 指定した試合リストでの選手成績を計算（calcFilteredと同じ集計ロジックの再利用版）
+function computePlayerStats(pid, gameList) {
+  let pa=0,rbi=0,sb=0,sba=0,run=0,h1=0,h2=0,h3=0,hr=0,bb=0,ibb=0,hbp=0,sac=0,sf=0,k=0,nonAB=0;
+  (gameList||[]).forEach(g => {
+    const s = g.stats && g.stats.find(st => st.pid === pid);
+    if (!s || s.pa < 0) return;
+    pa+=s.pa||0; rbi+=s.rbi||0; sb+=s.sb||0; sba+=s.sba||0; run+=s.run||0;
+    (s.details||[]).forEach(d => {
+      switch(d.res) {
+        case '単打':h1++;break; case '二塁打':h2++;break; case '三塁打':h3++;break; case '本塁打':hr++;break;
+        case '四球':bb++;break; case '敬遠':ibb++;break; case '死球':hbp++;break;
+        case '犠打':sac++;break; case '犠飛':sf++;break;
+        case '三振':case '見逃し三振':case '空振り三振':case '振り逃げ':k++;break;
+        case '打撃妨害':case '走塁妨害':nonAB++;break;
+      }
+    });
+  });
+  const h=h1+h2+h3+hr, ab=pa-bb-ibb-hbp-sac-sf-nonAB, tb=h1+2*h2+3*h3+4*hr;
+  const bbhbp=bb+ibb+hbp;
+  const f=(v,d=3)=>v===null?'---':v.toFixed(d).replace(/^0(\.)/, '$1');
+  const avg=ab>0?h/ab:null, obp=(ab+bb+hbp+sf)>0?(h+bb+hbp)/(ab+bb+hbp+sf):null;
+  const slg=ab>0?tb/ab:null, ops=(obp!==null&&slg!==null)?obp+slg:null;
+  return {pa,ab,h,tb,rbi,sb,sba,run,bbhbp,k,avg:f(avg),obp:f(obp),slg:f(slg),ops:ops!==null?ops.toFixed(3):'---'};
+}
+
+// 選手がその試合に出場したか（pa>=0のstatsエントリがあるか）
+function playerPlayed(pid, g) {
+  const s = g.stats && g.stats.find(st => st.pid === pid);
+  return !!(s && s.pa >= 0);
+}
+
+function openPlayerModal(pid) {
+  _modalPid = pid;
+  document.getElementById('player-modal').style.display = 'flex';
+  renderPlayerModal();
+}
+function closePlayerModal() {
+  document.getElementById('player-modal').style.display = 'none';
+  _modalPid = null;
+}
+function navPlayer(dir) {
+  const order = (_statsRowOrder && _statsRowOrder.length) ? _statsRowOrder : players.map(p=>p.id);
+  if (!order.length) return;
+  let idx = order.indexOf(_modalPid);
+  if (idx < 0) idx = 0;
+  idx = (idx + dir + order.length) % order.length;
+  _modalPid = order[idx];
+  renderPlayerModal();
+}
+function renderPlayerModal() {
+  const p = players.find(pl => pl.id === _modalPid);
+  if (!p) { closePlayerModal(); return; }
+  document.getElementById('player-modal-title').innerHTML =
+    `<span class="player-num">${p.number}</span>${p.name}`;
+
+  // 成績ページのフィルター結果を尊重。出場した試合のみ・新しい順
+  const src = (_statsFilteredGames && _statsFilteredGames.length) ? _statsFilteredGames : games;
+  const myGames = [...src].filter(g => playerPlayed(p.id, g))
+                          .sort((a,b) => b.date.localeCompare(a.date));
+  const mode = document.getElementById('stats-table-wrap')?.classList.contains('detail') ? 'detail' : 'compact';
+  const body = document.getElementById('player-modal-body');
+
+  if (!myGames.length) {
+    body.innerHTML = '<p style="text-align:center;padding:30px;color:var(--muted);">この条件で出場した試合がありません</p>';
+    return;
+  }
+
+  const headCells = `
+    <th style="text-align:left;">試合</th>
+    <th>打率</th><th>出塁率</th><th>OPS</th><th>長打率</th>
+    <th class="col-detail">打席</th><th class="col-detail">打数</th><th class="col-detail">安打</th>
+    <th class="col-detail">塁打</th><th class="col-detail">四死球</th><th class="col-detail">三振</th>
+    <th class="col-detail">打点</th><th class="col-detail">得点</th>
+    <th class="col-detail">盗塁企図</th><th class="col-detail">盗塁</th>`;
+
+  const rowCells = (label, s, cls='') => `
+    <tr class="${cls}">
+      <td style="text-align:left;">${label}</td>
+      <td>${s.avg}</td><td>${s.obp}</td><td>${s.ops}</td><td>${s.slg}</td>
+      <td class="col-detail">${s.pa}</td><td class="col-detail">${s.ab}</td><td class="col-detail">${s.h}</td>
+      <td class="col-detail">${s.tb}</td><td class="col-detail">${s.bbhbp}</td><td class="col-detail">${s.k}</td>
+      <td class="col-detail">${s.rbi}</td><td class="col-detail">${s.run}</td>
+      <td class="col-detail">${s.sba}</td><td class="col-detail">${s.sb}</td>
+    </tr>`;
+
+  const gameRows = myGames.map(g => {
+    const s = computePlayerStats(p.id, [g]);
+    const label = `${g.date}<br><span style="font-size:11px;color:var(--muted);">vs ${g.opponent}</span>`;
+    return rowCells(label, s);
+  }).join('');
+  const total = computePlayerStats(p.id, myGames);
+  const totalRow = rowCells(`通算 (${myGames.length}試合)`, total, 'pm-total');
+
+  body.innerHTML = `
+    <div class="pm-table ${mode}">
+      <table>
+        <thead><tr>${headCells}</tr></thead>
+        <tbody>${gameRows}${totalRow}</tbody>
+      </table>
+    </div>`;
+}
+// Escキーで閉じる
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('player-modal')?.style.display === 'flex') {
+    closePlayerModal();
+  }
+});
 
 </script>
 
