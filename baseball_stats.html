@@ -241,7 +241,7 @@ td { padding: 10px 6px; font-size: 12px; }
 <div id="app-content" style="display:none;">
 <header>
   <div class="logo" onclick="loadFromSupabase();switchTab('stats');" style="cursor:pointer;">⚾ BALL<span>STATS</span></div>
-  <div id="app-version" style="margin-left:auto;font-size:11px;color:var(--muted);font-family:monospace;letter-spacing:0.5px;opacity:0.7;">v2026.05.21-b</div>
+  <div id="app-version" style="margin-left:auto;font-size:11px;color:var(--muted);font-family:monospace;letter-spacing:0.5px;opacity:0.7;">v2026.05.21-c</div>
 </header>
 
 <div class="main">
@@ -643,7 +643,8 @@ function renderStats() {
       teamRBI+=s.rbi||0; teamSB+=s.sb||0;
       (s.details||[]).forEach(d => {
         const r=d.res||'';
-        if (!['四球','死球','見逃し三振','空振り三振','振り逃げ','敬遠','打撃妨害','走塁妨害','犠打','犠飛'].includes(r)) teamAB++;
+        // 三振は打数に含める。除外するのは四死球・犠打飛・妨害のみ
+        if (!['四球','死球','敬遠','打撃妨害','走塁妨害','犠打','犠飛'].includes(r)) teamAB++;
         if (['単打','二塁打','三塁打','本塁打'].includes(r)) teamH++;
       });
     });
@@ -728,7 +729,8 @@ function gameTeamStats(g) {
     (s.details||[]).forEach(d => {
       const r = d.res||'';
       if (['四球','敬遠','死球'].includes(r)) bbhbp++;
-      if (!['四球','死球','見逃し三振','空振り三振','振り逃げ','敬遠','打撃妨害','走塁妨害','犠打','犠飛'].includes(r)) ab++;
+      // 三振は打数に含める。除外するのは四死球・犠打飛・妨害のみ
+      if (!['四球','死球','敬遠','打撃妨害','走塁妨害','犠打','犠飛'].includes(r)) ab++;
       if (['単打','二塁打','三塁打','本塁打'].includes(r)) h++;
     });
   });
