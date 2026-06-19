@@ -1,0 +1,2869 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>neo score book</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #F2F4F0; font-family: 'Noto Sans JP', sans-serif; }
+    #root { width: 100%; max-width: 480px; margin: 0 auto; }
+    select { font-family: 'Noto Sans JP', sans-serif; }
+    input { font-family: 'Noto Sans JP', sans-serif; }
+    textarea { font-family: 'Noto Sans JP', sans-serif; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useRef, useEffect } = React;
+
+    const APP_VERSION = "v2026.06.17-1";
+
+    // Supabase接続
+    const SUPABASE_URL = "https://zorxexynepvbaajblsfm.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvcnhleHluZXB2YmFhamJsc2ZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM5OTQ0MzgsImV4cCI6MjA4OTU3MDQzOH0.0C62pn7B1qiLXbLoqdEY5CXD8mn8Nb8K_RI8qL5VFGQ";
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+
+    // SVGアイコンコンポーネント（Lucide代替）
+    const PenLine = ({size=24,color="currentColor",strokeWidth=2}) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+      </svg>
+    );
+    const ScrollText = ({size=24,color="currentColor",strokeWidth=2}) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 0 1-2 2zm0 0a2 2 0 0 1-2-2v-2h2"/><path d="M14 7H8"/><path d="M14 11H8"/><path d="M14 15H8"/>
+        <rect x="2" y="3" width="12" height="18" rx="2"/>
+      </svg>
+    );
+    const BarChart2 = ({size=24,color="currentColor",strokeWidth=2}) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+        <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+      </svg>
+    );
+    const Settings = ({size=24,color="currentColor",strokeWidth=2}) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+    );
+    const Users = ({size=24,color="currentColor",strokeWidth=2}) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+    );
+    const Calendar = ({size=24,color="currentColor",strokeWidth=2}) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+    );
+    const ChevronRight = ({size=24,color="currentColor",strokeWidth=2}) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="9 18 15 12 9 6"/>
+      </svg>
+    );
+    const TrendingUp = ({size=24,color="currentColor",strokeWidth=2}) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>
+      </svg>
+    );
+    const GripVertical = ({size=24,color="currentColor",strokeWidth=2}) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/>
+        <circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/>
+      </svg>
+    );
+    const Save = ({size=24,color="currentColor",strokeWidth=2}) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+      </svg>
+    );
+    const Plus = ({size=24,color="currentColor",strokeWidth=2}) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+      </svg>
+    );
+    const X = ({size=24,color="currentColor",strokeWidth=2}) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+    );
+    const ChevronDown = ({size=24,color="currentColor",strokeWidth=2}) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="6 9 12 15 18 9"/>
+      </svg>
+    );
+
+
+/*
+ * ═══════════════════════════════════════════
+ * neo score book - アプリ階層構成 v1.0
+ * ═══════════════════════════════════════════
+ *
+ * neo score book
+ * ├── 試合
+ * │     ├── 試合一覧
+ * │     ├── 試合詳細
+ * │     │     ├── スコア・経過
+ * │     │     └── 成績（打者・投手）
+ * │     └── 試合記録　← 現在開発中
+ * │           ├── 記録ビュー
+ * │           ├── 経過ビュー
+ * │           └── 成績ビュー
+ * │
+ * ├── 選手
+ * │     ├── 選手一覧
+ * │     └── 選手詳細
+ * │           ├── プロフィール
+ * │           ├── 通算成績
+ * │           └── 試合別推移
+ * │
+ * └── チーム
+ *       ├── チーム情報
+ *       ├── メンバー管理
+ *       └── アカウント設定
+ *
+ * ボトムタブ：試合 / 選手 / チーム
+ * 対象：スコアラー・コーチ・選手（小学〜高校）
+ * 入力担当：スコアラー・マネージャー
+ * プラットフォーム：スマホ＋Web両対応
+ * 認証：チームID＋パスワード
+ * ═══════════════════════════════════════════
+ */
+
+// カラーパレット
+const C = {
+  bg:          "#F2F4F0",
+  card:        "#FFFFFF",
+  cardShadow:  "0 2px 16px rgba(0,0,0,0.07)",
+  brand:       "#3D6B3D",
+  brandLight:  "#EBF2EB",
+  brandText:   "#FFFFFF",
+  textPri:     "#1A1A1A",
+  textSec:     "#888888",
+  textTer:     "#AAAAAA",
+  divider:     "#F0F0F0",
+  scoreBg:     "#2A4F2A",
+  scoreText:   "#F0F8F0",
+  scoreSubText:"#8CB88C",
+  bsoB:        "#3D7A3D",
+  bsoS:        "#8B6914",
+  bsoO:        "#8B2020",
+};
+
+const TEAM_A = "阪神";
+const TEAM_B = "巨人";
+
+const BATTERS_A = [
+  { order: 1, number: 1,  name: "近本 光司",  pos: "センター" },
+  { order: 2, number: 8,  name: "中野 拓夢",  pos: "セカンド" },
+  { order: 3, number: 99, name: "森下 翔太",  pos: "ライト" },
+  { order: 4, number: 6,  name: "大山 悠輔",  pos: "ファースト" },
+  { order: 5, number: 5,  name: "佐藤 輝明",  pos: "サード" },
+  { order: 6, number: 44, name: "ノイジー",   pos: "レフト" },
+  { order: 7, number: 2,  name: "木浪 聖也",  pos: "ショート" },
+  { order: 8, number: 27, name: "坂本 誠志郎", pos: "キャッチャー" },
+  { order: 9, number: 18, name: "青柳 晃洋",  pos: "ピッチャー" },
+];
+const BATTERS_B = [
+  { order: 1, number: 7,  name: "丸 佳浩",   pos: "センター" },
+  { order: 2, number: 6,  name: "吉川 尚輝",  pos: "セカンド" },
+  { order: 3, number: 3,  name: "岡本 和真",  pos: "ファースト" },
+  { order: 4, number: 25, name: "ブリンソン",  pos: "ライト" },
+  { order: 5, number: 55, name: "秋広 優人",  pos: "サード" },
+  { order: 6, number: 9,  name: "坂本 勇人",  pos: "ショート" },
+  { order: 7, number: 34, name: "オコエ 瑠偉", pos: "レフト" },
+  { order: 8, number: 32, name: "大城 卓三",  pos: "キャッチャー" },
+  { order: 9, number: 17, name: "菅野 智之",  pos: "ピッチャー" },
+];
+const PITCHER_A = { number: 18, name: "青柳 晃洋" };
+const PITCHER_B = { number: 17, name: "菅野 智之" };
+
+const BASE_NAMES = { 1: "1塁", 2: "2塁", 3: "3塁", 4: "ホーム（得点）" };
+const RUNNERS_INIT = { first: false, second: false, third: false };
+const nextBase = (base) => base === "first" ? "second" : base === "second" ? "third" : null;
+
+const makeBat = (player, pitcherNumber = null, runnersAtStart = { first: false, second: false, third: false }) => ({
+  order: player.order, number: player.number,
+  name: player.name, pos: player.pos,
+  pitches: [], events: [], result: null,
+  runsScored: 0, scoreAfterA: null, scoreAfterB: null,
+  pitcherNumber, runnersAtStart,
+  runnersAfter: null, // 打席終了後のランナー状態
+});
+
+// ── Diamond ──
+function Diamond({ runners, onBaseClick }) {
+  const S = 20, cx = 40;
+  const bp = (filled) => ({ fill: filled ? "#639922" : "transparent", stroke: filled ? "#3B6D11" : "#B4B2A9", strokeWidth: 1.5 });
+  return (
+    <svg viewBox="-6 -6 92 92" width="80" height="80" fill="none">
+      <g transform={`rotate(45 ${cx} 12)`} onClick={() => runners.second && onBaseClick?.("second")} style={{ cursor: runners.second ? "pointer" : "default" }}>
+        <rect x={cx-S/2} y={2} width={S} height={S} rx={3} {...bp(runners.second)}/>
+      </g>
+      <g transform={`rotate(45 12 ${cx})`} onClick={() => runners.third && onBaseClick?.("third")} style={{ cursor: runners.third ? "pointer" : "default" }}>
+        <rect x={2} y={cx-S/2} width={S} height={S} rx={3} {...bp(runners.third)}/>
+      </g>
+      <g transform={`rotate(45 ${cx*2-12} ${cx})`} onClick={() => runners.first && onBaseClick?.("first")} style={{ cursor: runners.first ? "pointer" : "default" }}>
+        <rect x={cx*2-12-S/2} y={cx-S/2} width={S} height={S} rx={3} {...bp(runners.first)}/>
+      </g>
+      <g transform={`rotate(45 ${cx} ${cx*2-12})`}>
+        <rect x={cx-S/2} y={cx*2-12-S/2} width={S} height={S} rx={3} fill="transparent" stroke="#C0BEB8" strokeWidth={1}/>
+      </g>
+    </svg>
+  );
+}
+
+function Dot({ filled, color }) {
+  return <span style={{ width:10, height:10, borderRadius:"50%", background: filled ? color : "#DDDDDD", display:"inline-block", transition:"background 0.15s" }}/>;
+}
+
+const CHIP = {
+  B:    { bg:"#E8F5E8", color:"#2D5C2D", label:"B" },
+  見逃: { bg:"#F5F0E8", color:"#6B5A2D", label:"見" },
+  空振: { bg:"#F5F0E8", color:"#6B5A2D", label:"空" },
+  F:    { bg:"#F1EFE8", color:"#5F5E5A", label:"F" },
+  IP:   { bg:C.brandText, color:C.brand, label:"安" },
+  DB:   { bg:"#F5EAEA", color:"#6B2020", label:"死" },
+  振:   { bg:"#F0EFF5", color:"#3D3D6B", label:"振" },
+};
+
+function PitchChip({ type }) {
+  const s = CHIP[type] || { bg:"#F1EFE8", color:"#444", label:type };
+  return <span style={{ fontSize:11, padding:"3px 8px", borderRadius:20, fontWeight:600, background:s.bg, color:s.color, border:`0.5px solid ${s.color}33` }}>{s.label}</span>;
+}
+
+const Btn = ({ label, bg, border, color, onClick, disabled, style={} }) => (
+  <div onClick={disabled?undefined:onClick} style={{
+    borderRadius:10, border:`1px solid ${disabled?"#C4C2B8":border}`,
+    background:disabled?C.bg:bg,
+    fontSize:13, fontWeight:700, cursor:disabled?"not-allowed":"pointer",
+    textAlign:"center", color:disabled?"#B4B2A9":color,
+    userSelect:"none", padding:"15px 6px", opacity:disabled?0.5:1,
+    boxShadow: disabled ? "none" : `0 3px 0 ${border}99`,
+    transition:"transform 0.08s, box-shadow 0.08s",
+    ...style,
+  }}
+    onPointerDown={e => { if (!disabled) { e.currentTarget.style.transform="translateY(3px)"; e.currentTarget.style.boxShadow="none"; }}}
+    onPointerUp={e => { if (!disabled) { e.currentTarget.style.transform=""; e.currentTarget.style.boxShadow=`0 3px 0 ${border}99`; }}}
+    onPointerLeave={e => { if (!disabled) { e.currentTarget.style.transform=""; e.currentTarget.style.boxShadow=`0 3px 0 ${border}99`; }}}
+  >{label}</div>
+);
+
+// ── 経過ビュー ──
+function MiniDiamond({ runners }) {
+  const r = runners ?? RUNNERS_INIT;
+  const base = (filled) => ({ fill: filled ? "#639922" : "transparent", stroke: filled ? "#3B6D11" : "#B4B2A9", strokeWidth: 1 });
+  const S = 10, cx = 22;
+  return (
+    <svg viewBox="-4 -4 52 52" width="40" height="40" fill="none">
+      <g transform={`rotate(45 ${cx} 8)`}><rect x={cx-S/2} y={2} width={S} height={S} rx={2} {...base(r.second)}/></g>
+      <g transform={`rotate(45 8 ${cx})`}><rect x={2} y={cx-S/2} width={S} height={S} rx={2} {...base(r.third)}/></g>
+      <g transform={`rotate(45 ${cx*2-8} ${cx})`}><rect x={cx*2-8-S/2} y={cx-S/2} width={S} height={S} rx={2} {...base(r.first)}/></g>
+      <g transform={`rotate(45 ${cx} ${cx*2-8})`}><rect x={cx-S/2} y={cx*2-8-S/2} width={S} height={S} rx={2} fill="transparent" stroke="#C0BEB8" strokeWidth={1}/></g>
+    </svg>
+  );
+}
+
+function HistoryView({ gameLog }) {
+  const [expanded, setExpanded] = useState({});
+  const toggle = (key) => setExpanded(e => ({ ...e, [key]: !e[key] }));
+
+  const resultColor = (result) => {
+    if (!result) return C.textTer;
+    if (["ヒット","二塁打","三塁打","本塁打","1塁打","2塁打","3塁打","ホームラン","エラー","野選","FC","フォアボール","デッドボール","振り逃げ","犠飛"].some(r => result.includes(r))) return C.brand;
+    if (["ゴロ","フライ","ライナー","バント","アウト","三振"].some(r => result.includes(r))) return "#8B2020";
+    return C.textPri;
+  };
+
+  if (gameLog.length === 0) {
+    return <div style={{ padding:"40px 14px", textAlign:"center", color: C.textTer, fontSize:13 }}>まだ記録がありません</div>;
+  }
+
+  return (
+    <div style={{ overflowY:"auto", maxHeight:480, background: C.bg }}>
+      {gameLog.map((half, hi) => {
+        const inningRuns = half.atBats.reduce((sum, ab) => sum + (ab.runsScored || 0), 0);
+        const isAttackA = half.topBottom === "表";
+        return (
+          <div key={hi}>
+            {/* イニングヘッダー */}
+            <div style={{ padding:"8px 16px", background: C.scoreBg, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <span style={{ fontSize:12, fontWeight:700, color: C.scoreText }}>{half.inning}回 {half.topBottom === "表" ? "▲ 表" : "▼ 裏"}</span>
+              {inningRuns > 0
+                ? <span style={{ fontSize:12, fontWeight:700, color:"#F0C040" }}>+{inningRuns}点</span>
+                : <span style={{ fontSize:11, color: C.scoreSubText }}>得点なし</span>
+              }
+            </div>
+            {/* 打席一覧 */}
+            {half.atBats.map((ab, ai) => {
+              const key = `${hi}-${ai}`;
+              const isOpen = expanded[key];
+              const scored = (ab.runsScored || 0) > 0;
+              const scoreStr = scored ? `${ab.scoreAfterA ?? "?"} - ${ab.scoreAfterB ?? "?"}` : null;
+              const isInterrupted = !ab.result && hi < gameLog.length - 1 && ai === half.atBats.length - 1;
+              return (
+                <div key={ai} style={{ borderBottom:`1px solid ${C.divider}`, background: scored ? "#F0F8F0" : C.card, margin:"0 16px 0", borderRadius: isOpen ? "0" : "0" }}>
+                  <div onClick={() => toggle(key)} style={{ padding:"10px 14px", display:"flex", alignItems:"center", gap:6, cursor:"pointer", userSelect:"none" }}>
+                    <span style={{ fontSize:11, color: C.textTer, width:28, flexShrink:0 }}>{ab.order}番</span>
+                    <span style={{ fontSize:13, fontWeight:600, color: C.textPri, flex:1 }}>#{ab.number} {ab.name}</span>
+                    <span style={{ fontSize:12, fontWeight:600, color: isInterrupted ? C.textTer : resultColor(ab.result) }}>
+                      {ab.result ?? (isInterrupted ? "─" : "打席中")}
+                    </span>
+                    {scored && (
+                      <span style={{ fontSize:11, fontWeight:700, background: C.brandLight, color: C.brand, padding:"2px 8px", borderRadius:20, flexShrink:0 }}>
+                        +{ab.runsScored}
+                      </span>
+                    )}
+                    {scoreStr && (
+                      <span style={{ fontSize:11, fontWeight:600, color: C.brand, flexShrink:0 }}>
+                        → {scoreStr}
+                      </span>
+                    )}
+                    <span style={{ fontSize:10, color: C.textTer, display:"inline-block", transform:isOpen?"rotate(180deg)":"rotate(0deg)", transition:"transform 0.15s" }}>▼</span>
+                  </div>
+                  {isOpen && (
+                    <div style={{ padding:"8px 14px 12px", background: C.bg }}>
+                      {/* ランナーの動き */}
+                      {(ab.runnersAtStart || ab.runnersAfter) && (
+                        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+                          <div style={{ textAlign:"center" }}>
+                            <div style={{ fontSize:9, color: C.textTer, marginBottom:3 }}>打席前</div>
+                            <MiniDiamond runners={ab.runnersAtStart ?? RUNNERS_INIT}/>
+                          </div>
+                          <div style={{ fontSize:16, color: C.textTer }}>→</div>
+                          <div style={{ textAlign:"center" }}>
+                            <div style={{ fontSize:9, color: C.textTer, marginBottom:3 }}>打席後</div>
+                            <MiniDiamond runners={ab.runnersAfter ?? ab.runnersAtStart ?? RUNNERS_INIT}/>
+                          </div>
+                        </div>
+                      )}
+                      {/* 投球チップ */}
+                      <div style={{ display:"flex", gap:4, flexWrap:"wrap", marginBottom:ab.events.length?6:0 }}>
+                        {ab.pitches.map((p, pi) => {
+                          const s = CHIP[p] || { bg: C.brandLight, color: C.brand };
+                          return <span key={pi} style={{ fontSize:10, padding:"2px 8px", borderRadius:20, fontWeight:600, background:s.bg, color:s.color }}>{CHIP[p]?.label ?? p}</span>;
+                        })}
+                      </div>
+                      {ab.events.map((ev, ei) => (
+                        <div key={ei} style={{ fontSize:11, color: C.brand, marginTop:4 }}>▶ {ev}</div>
+                      ))}
+                      {ab.pitches.length === 0 && ab.events.length === 0 && (
+                        <span style={{ fontSize:11, color: C.textTer }}>投球なし</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            <div style={{ height:8, background: C.bg }}/>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── メインコンポーネント ──
+const isPitcher = (pos) => pos === "ピッチャー" || pos === "投";
+
+function StatsView({ gameLog, battersA, battersB, teamNameA, teamNameB }) {
+  const [tab, setTab] = useState("batter");
+
+  // gameLogから打者・投手成績を集計
+  const calcStats = (batters, isTop) => {
+    const stats = {};
+    batters.forEach(b => {
+      stats[b.number] = {
+        ...b, pa: 0, atBats: 0, hits: 0, rbi: 0, hr: 0, sb: 0,
+        bb: 0, hbp: 0, so: 0, sac: 0,
+        // 投手
+        pitches: 0, outs: 0, pHits: 0, strikeouts: 0, walks: 0, pHbp: 0, runs: 0,
+      };
+    });
+
+    gameLog.forEach(half => {
+      if ((half.topBottom === "表") !== isTop) return;
+      half.atBats.forEach(ab => {
+        const s = stats[ab.number];
+        if (!s) return;
+        const r = ab.result;
+        if (!r) return;
+
+        // 打者成績
+        const isHit = ["ヒット","二塁打","三塁打","本塁打","1塁打","2塁打","3塁打","ホームラン"].some(h => r.includes(h));
+        const isSF  = r.includes("犠飛");
+        const isSAC = r.includes("犠打") || r.includes("バント");
+        const isIBB = r.includes("故意四球");
+        const isBB  = r.includes("フォアボール") && !isIBB;
+        const isAB  = !["フォアボール","故意四球","デッドボール","犠打","犠飛","バント"].some(x => r.includes(x));
+        s.pa++;
+        if (isAB) s.atBats++;
+        if (isHit) s.hits++;
+        if (r.includes("本塁打") || r.includes("ホームラン")) s.hr++;
+        if (isBB) s.bb++;
+        if (isIBB) s.ibb = (s.ibb||0) + 1;
+        if (r.includes("デッドボール")) s.hbp++;
+        if (r.includes("三振")) s.so++;
+        if (isSF)  s.sf  = (s.sf||0)  + 1;
+        if (isSAC) s.sac = (s.sac||0) + 1;
+
+        // 塁打数（長打率計算用）
+        if (r.includes("ヒット") && !r.includes("二塁打") && !r.includes("三塁打")) s.tb = (s.tb||0) + 1;
+        if (r.includes("1塁打"))  s.tb = (s.tb||0) + 1;
+        if (r.includes("二塁打") || r.includes("2塁打")) s.tb = (s.tb||0) + 2;
+        if (r.includes("三塁打") || r.includes("3塁打")) s.tb = (s.tb||0) + 3;
+        if (r.includes("本塁打") || r.includes("ホームラン")) s.tb = (s.tb||0) + 4;
+
+        // 得点圏打席・得点圏安打（runnersAtStartに2塁か3塁があれば得点圏）
+        const rs = ab.runnersAtStart || {};
+        if (rs.second || rs.third) {
+          s.risp_ab  = (s.risp_ab||0)  + (isAB ? 1 : 0);
+          s.risp_hit = (s.risp_hit||0) + (isHit ? 1 : 0);
+        }
+
+        // 打点計算（公認野球規則 9.04準拠）
+        const runs = ab.runsScored || 0;
+        if (runs > 0) {
+          const isHBP = r.includes("デッドボール");
+          const isDP  = r.includes("ゲッツー");
+          if (isDP) {
+            // ゲッツー完成時は打点なし
+          } else if ((isBB || isIBB || isHBP) && rs.first && rs.second && rs.third) {
+            // 四球・死球・故意四球は満塁押し出し時のみ打点1
+            s.rbi += 1;
+          } else if (!isBB && !isIBB && !isHBP) {
+            s.rbi += runs;
+          }
+        }
+
+        // 走塁イベントから盗塁
+        ab.events?.forEach(ev => { if (ev.includes("盗塁成功")) s.sb++; });
+      });
+    });
+
+    // 投手成績（相手の攻撃イニングを集計）
+    const pitcherStats = {};
+    batters.filter(b => isPitcher(b.pos)).forEach(b => {
+      pitcherStats[b.number] = { ...b, pitches: 0, outs: 0, pHits: 0, strikeouts: 0, walks: 0, pHbp: 0, runs: 0 };
+    });
+
+    // 相手チームの攻撃イニングを集計（各打席のpitcherNumberで投手を特定）
+    gameLog.forEach(half => {
+      if ((half.topBottom === "表") === isTop) return; // 相手の攻撃のみ
+      half.atBats.forEach(ab => {
+        const r = ab.result;
+        if (!r) return;
+        // この打席の投手を特定
+        const ps = ab.pitcherNumber ? pitcherStats[ab.pitcherNumber] : null;
+        if (!ps) return;
+        // 投球数
+        ps.pitches += ab.pitches?.length || 0;
+        // アウト（新表記：遊ゴロ・左フライ等、旧表記：ゴロアウト等、三振）
+        const isOutP = ["ゴロ","フライ","ライナー","バント","アウト","三振"].some(x => r.includes(x))
+          && !["ヒット","二塁打","三塁打","本塁打","1塁打","2塁打","3塁打","ホームラン","エラー","野選","FC","フォアボール","デッドボール","振り逃げ","犠飛"].some(x => r.includes(x));
+        if (isOutP) ps.outs++;
+        // 被安打（新旧両表記対応）
+        if (["ヒット","二塁打","三塁打","本塁打","1塁打","2塁打","3塁打","ホームラン"].some(h => r.includes(h))) ps.pHits++;
+        // 奪三振
+        if (r.includes("三振")) ps.strikeouts++;
+        // 与四球
+        if (r.includes("フォアボール")) ps.walks++;
+        // 与死球
+        if (r.includes("デッドボール")) ps.pHbp++;
+        // 失点（得点が入った打席の投手に加算）
+        ps.runs += ab.runsScored || 0;
+      });
+    });
+
+    return {
+      batting: Object.values(stats).sort((a, b) => a.order - b.order),
+      pitching: Object.values(pitcherStats),
+    };
+  };
+
+  const statsA = React.useMemo(() => calcStats(battersA, true),  [gameLog, battersA]);
+  const statsB = React.useMemo(() => calcStats(battersB, false), [gameLog, battersB]);
+  const gameAvg  = (h, ab) => ab === 0 ? "-" : (h / ab).toFixed(3).replace("0.", ".");
+  const gameOBP  = (b) => {
+    const denom = b.atBats + (b.bb||0) + (b.hbp||0) + (b.sf||0);
+    return denom === 0 ? "-" : ((b.hits + (b.bb||0) + (b.hbp||0)) / denom).toFixed(3).replace("0.", ".");
+  };
+  const gameSLG  = (b) => b.atBats === 0 ? "-" : ((b.tb||0) / b.atBats).toFixed(3).replace("0.", ".");
+  const gameOPS  = (b) => {
+    const obp = parseFloat(("0" + gameOBP(b)).replace("-","0"));
+    const slg = parseFloat(("0" + gameSLG(b)).replace("-","0"));
+    return (obp + slg).toFixed(3).replace("0.", ".");
+  };
+  const gameRISP = (b) => (b.risp_ab||0) === 0 ? "-" : ((b.risp_hit||0) / b.risp_ab).toFixed(3).replace("0.", ".");
+
+  const Cell = ({ val, highlight }) => (
+    <div style={{ width: 32, textAlign: "center", fontSize: 12, flexShrink: 0, color: highlight && val > 0 ? C.brand : C.textPri, fontWeight: highlight && val > 0 ? 700 : 400 }}>{val}</div>
+  );
+
+  const HCell = ({ label }) => (
+    <div style={{ width: 32, textAlign: "center", fontSize: 10, color: C.textTer, fontWeight: 600, flexShrink: 0 }}>{label}</div>
+  );
+
+  const calcTotals = (batting) => batting.reduce((acc, b) => ({
+    pa: acc.pa + b.pa, atBats: acc.atBats + b.atBats, hits: acc.hits + b.hits,
+    rbi: acc.rbi + b.rbi, hr: acc.hr + b.hr, sb: acc.sb + b.sb,
+  }), { pa: 0, atBats: 0, hits: 0, rbi: 0, hr: 0, sb: 0 });
+
+  const totalsA = calcTotals(statsA.batting);
+  const totalsB = calcTotals(statsB.batting);
+
+  const BatterTable = ({ stats, totals, teamName }) => (
+    <>
+      <div style={{ padding: "6px 14px", background: C.scoreBg, borderBottom: `1px solid ${C.divider}` }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: C.scoreText }}>{teamName}</span>
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <div style={{ minWidth: 472 }}>
+          {/* ヘッダー */}
+          <div style={{ padding: "5px 14px", background: C.bg, display: "flex", alignItems: "center", borderBottom: `1px solid ${C.divider}` }}>
+            <div style={{ width: 100, fontSize: 10, color: C.textTer, fontWeight: 600, flexShrink: 0 }}>選手名</div>
+            {["打率","席","打","安","点","本","盗","出塁率","長打率","OPS","得点圏"].map(h => <HCell key={h} label={h}/>)}
+          </div>
+          {/* 選手行 */}
+          {stats.map((b, i) => (
+            <div key={i} style={{ padding: "7px 14px", display: "flex", alignItems: "center", borderBottom: `1px solid ${C.divider}` }}>
+              <div style={{ width: 100, fontSize: 11, fontWeight: 500, color: C.textPri, flexShrink: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {b.order}番 {b.name}
+              </div>
+              <div style={{ width: 32, textAlign: "center", fontSize: 11, flexShrink: 0, color: C.textPri }}>
+                {isPitcher(b.pos) ? "-" : gameAvg(b.hits, b.atBats)}
+              </div>
+              <Cell val={b.pa}/>
+              <Cell val={b.atBats}/>
+              <Cell val={b.hits} highlight/>
+              <Cell val={b.rbi} highlight/>
+              <Cell val={b.hr} highlight/>
+              <Cell val={b.sb} highlight/>
+              <div style={{ width: 32, textAlign: "center", fontSize: 11, flexShrink: 0, color: C.textSec }}>{isPitcher(b.pos) ? "-" : gameOBP(b)}</div>
+              <div style={{ width: 32, textAlign: "center", fontSize: 11, flexShrink: 0, color: C.textSec }}>{isPitcher(b.pos) ? "-" : gameSLG(b)}</div>
+              <div style={{ width: 32, textAlign: "center", fontSize: 11, flexShrink: 0, fontWeight: 600, color: C.brand }}>{isPitcher(b.pos) ? "-" : gameOPS(b)}</div>
+              <div style={{ width: 32, textAlign: "center", fontSize: 11, flexShrink: 0, color: (b.risp_ab||0) > 0 ? C.brand : C.textTer }}>{isPitcher(b.pos) ? "-" : gameRISP(b)}</div>
+            </div>
+          ))}
+          {/* チーム計 */}
+          <div style={{ padding: "7px 14px", display: "flex", alignItems: "center", background: C.bg, borderTop: `1px solid ${C.divider}` }}>
+            <div style={{ width: 100, fontSize: 12, fontWeight: 700, color: C.textPri, flexShrink: 0 }}>チーム計</div>
+            <div style={{ width: 32, textAlign: "center", fontSize: 11, flexShrink: 0, fontWeight: 700 }}>{gameAvg(totals.hits, totals.atBats)}</div>
+            <Cell val={totals.pa}/>
+            <Cell val={totals.atBats}/>
+            <Cell val={totals.hits} highlight/>
+            <Cell val={totals.rbi} highlight/>
+            <Cell val={totals.hr} highlight/>
+            <Cell val={totals.sb} highlight/>
+            <div style={{ width: 32 }}/>
+            <div style={{ width: 32 }}/>
+            <div style={{ width: 32 }}/>
+            <div style={{ width: 32 }}/>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+
+  const PitcherTable = ({ pitchers, stats, teamName }) => (
+    <>
+      <div style={{ padding: "6px 14px", background: C.scoreBg, borderBottom: `1px solid ${C.divider}` }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: C.scoreText }}>{teamName}</span>
+      </div>
+      <div style={{ padding: "5px 14px", background: C.bg, display: "flex", alignItems: "center", borderBottom: `1px solid ${C.divider}` }}>
+        <div style={{ flex: 1, fontSize: 10, color: C.textTer, fontWeight: 600 }}>選手名</div>
+        {["回","球","安","振","四","死","失"].map(h => (
+          <div key={h} style={{ width: 30, fontSize: 10, color: C.textTer, fontWeight: 600, textAlign: "center", flexShrink: 0 }}>{h}</div>
+        ))}
+      </div>
+      {pitchers.map((b, i) => {
+        const ps = stats.pitching.find(p => p.number === b.number);
+        const innings = ps ? `${Math.floor(ps.outs / 3)}${ps.outs % 3 > 0 ? "." + (ps.outs % 3) : ""}` : "0";
+        return (
+          <div key={i} style={{ padding: "8px 14px", display: "flex", alignItems: "center", borderBottom: `1px solid ${C.divider}` }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 12, fontWeight: 500, color: C.textPri }}>#{b.number} {b.name}</div>
+            </div>
+            {[innings, ps?.pitches ?? 0, ps?.pHits ?? 0, ps?.strikeouts ?? 0, ps?.walks ?? 0, ps?.pHbp ?? 0, ps?.runs ?? 0].map((v, vi) => (
+              <div key={vi} style={{ width: 30, fontSize: 12, textAlign: "center", flexShrink: 0, color: vi === 6 && v > 0 ? "#8B2020" : C.textPri, fontWeight: vi === 6 && v > 0 ? 700 : 400 }}>{v}</div>
+            ))}
+          </div>
+        );
+      })}
+    </>
+  );
+
+  return (
+    <div style={{ overflowY: "auto", maxHeight: 520 }}>
+      {/* 打者/投手タブ */}
+      <div style={{ display: "flex", borderBottom: `1px solid ${C.divider}` }}>
+        {[{ id: "batter", label: "打者成績" }, { id: "pitcher", label: "投手成績" }].map(t => (
+          <div key={t.id} onClick={() => setTab(t.id)} style={{
+            flex: 1, padding: "10px", textAlign: "center",
+            fontSize: 13, fontWeight: 600, cursor: "pointer",
+            color: tab === t.id ? C.brand : C.textTer,
+            borderBottom: tab === t.id ? `2px solid ${C.brand}` : "2px solid transparent",
+          }}>{t.label}</div>
+        ))}
+      </div>
+
+      {/* 打者成績 */}
+      {tab === "batter" && <>
+        <BatterTable stats={statsA.batting} totals={totalsA} teamName={teamNameA}/>
+        <div style={{ height: 8, background: C.bg }}/>
+        <BatterTable stats={statsB.batting} totals={totalsB} teamName={teamNameB}/>
+      </>}
+
+      {/* 投手成績 */}
+      {tab === "pitcher" && <>
+        <PitcherTable pitchers={battersA.filter(b => isPitcher(b.pos))} stats={statsA} teamName={teamNameA}/>
+        <div style={{ height: 8, background: C.bg }}/>
+        <PitcherTable pitchers={battersB.filter(b => isPitcher(b.pos))} stats={statsB} teamName={teamNameB}/>
+        <div style={{ padding: "16px 14px", textAlign: "center", fontSize: 11, color: C.textTer }}>
+          投手成績の詳細集計は今後実装予定
+        </div>
+      </>}
+    </div>
+  );
+}
+
+const HIT_DIRECTIONS = ["-", "投", "捕", "一", "二", "三", "遊", "左", "左中", "中", "右中", "右"];
+const HIT_RESULTS_SAFE = ["ヒット", "二塁打", "三塁打", "本塁打", "エラー", "FC（野選）"];
+const HIT_RESULTS_OUT  = ["ゴロ", "フライ", "ライナー", "バント", "犠飛", "ファールフライ", "ファールライナー", "併殺打"];
+
+function InplayScreen({ batter, onResult }) {
+  const [tab, setTab] = useState("inplay"); // inplay | special
+  const [dir, setDir] = useState("-");
+  const [result, setResult] = useState("-");
+
+  const canConfirm = dir !== "-" && result !== "-";
+
+  const handleConfirm = () => {
+    if (!canConfirm) return;
+    const isSafe = HIT_RESULTS_SAFE.includes(result);
+    const batterBase = result === "ヒット" ? 1 : result === "二塁打" ? 2 : result === "三塁打" ? 3 : result === "本塁打" ? null : isSafe ? 1 : null;
+    const dp = result === "併殺打";
+    onResult({ label: `${dir}${result}`, type: isSafe ? "safe" : "out", batterBase, dp });
+  };
+
+  const selectStyle = {
+    width: "100%", padding: "12px 28px 12px 12px",
+    fontSize: 16, fontWeight: 500,
+    border: `1px solid ${C.divider}`,
+    borderRadius: 10,
+    background: C.bg,
+    color: C.textPri,
+    appearance: "none", WebkitAppearance: "none",
+    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
+    backgroundRepeat: "no-repeat",
+    backgroundPosition: "right 10px center",
+    cursor: "pointer",
+  };
+
+  return (
+    <>
+      {/* ヘッダー */}
+      <div style={{ padding:"10px 16px", borderBottom:`1px solid ${C.divider}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <span style={{ fontSize:12, color:C.textSec }}>#{batter.number} {batter.name}</span>
+        <span style={{ fontSize:13, fontWeight:600 }}>打席結果を選択</span>
+      </div>
+
+      {/* タブ */}
+      <div style={{ display:"flex", borderBottom:`1px solid ${C.divider}` }}>
+        {[{ id:"inplay", label:"インプレー" },{ id:"special", label:"死球 / 四球 / 振逃" }].map(t => (
+          <div key={t.id} onClick={() => setTab(t.id)} style={{
+            flex:1, padding:"9px", textAlign:"center", fontSize:12, fontWeight:600,
+            cursor:"pointer", userSelect:"none",
+            color: tab === t.id ? C.brand : C.textTer,
+            borderBottom: tab === t.id ? `2px solid ${C.brand}` : "2px solid transparent",
+          }}>{t.label}</div>
+        ))}
+      </div>
+
+      {/* インプレータブ */}
+      {tab === "inplay" && <>
+        <div style={{ padding:"14px 14px 10px", display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+          <div>
+            <div style={{ fontSize:11, color:C.textTer, fontWeight:600, marginBottom:6 }}>方向</div>
+            <select value={dir} onChange={e => setDir(e.target.value)} style={selectStyle}>
+              {HIT_DIRECTIONS.map(d => (
+                <option key={d} value={d}>{d === "-" ? "-- 方向 --" : d}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <div style={{ fontSize:11, color:C.textTer, fontWeight:600, marginBottom:6 }}>結果</div>
+            <select value={result} onChange={e => setResult(e.target.value)} style={selectStyle}>
+              <option value="-">-- 結果 --</option>
+              <optgroup label="出塁">
+                {HIT_RESULTS_SAFE.map(r => <option key={r} value={r}>{r}</option>)}
+              </optgroup>
+              <optgroup label="凡退">
+                {HIT_RESULTS_OUT.map(r => <option key={r} value={r}>{r}</option>)}
+              </optgroup>
+            </select>
+          </div>
+        </div>
+
+        <div style={{ margin:"0 14px 12px", padding:"10px 14px", borderRadius:8, background:C.bg, display:"flex", alignItems:"center", gap:8, minHeight:44 }}>
+          {canConfirm ? (
+            <>
+              <span style={{ fontSize:20, fontWeight:700, color:C.textPri }}>{dir}</span>
+              <span style={{ fontSize:13, color:C.textTer }}>×</span>
+              <span style={{ fontSize:20, fontWeight:700, color: HIT_RESULTS_SAFE.includes(result) ? C.brand : "#8B2020" }}>{result}</span>
+            </>
+          ) : (
+            <span style={{ fontSize:12, color:C.textTer }}>方向と結果を選んでください</span>
+          )}
+        </div>
+
+        <div style={{ padding:"0 14px 14px" }}>
+          <div
+            onClick={handleConfirm}
+            style={{
+              padding:"14px", borderRadius:10, textAlign:"center",
+              fontSize:15, fontWeight:700, userSelect:"none",
+              background: canConfirm ? C.brand : C.bg,
+              color: canConfirm ? C.brandText : C.textTer,
+              border:`1px solid ${canConfirm ? C.brand : C.divider}`,
+              cursor: canConfirm ? "pointer" : "not-allowed",
+            }}
+            onPointerDown={e => canConfirm && (e.currentTarget.style.opacity = "0.7")}
+            onPointerUp={e => e.currentTarget.style.opacity = "1"}
+            onPointerLeave={e => e.currentTarget.style.opacity = "1"}
+          >
+            {canConfirm ? `${dir} × ${result} を記録` : "方向と結果を選んでください"}
+          </div>
+        </div>
+      </>}
+
+      {/* 特殊タブ */}
+      {tab === "special" && (
+        <div style={{ padding:"14px", display:"flex", flexDirection:"column", gap:8 }}>
+          {[
+            { label:"死球", type:"DB" },
+            { label:"故意四球", type:"IBB" },
+            { label:"振り逃げ", type:"振" },
+          ].map(b => (
+            <div key={b.label} onClick={() => onResult({ label: b.label, type: "safe", batterBase: 1, special: b.type })} style={{
+              padding:"15px", borderRadius:10, textAlign:"center",
+              fontSize:14, fontWeight:700, cursor:"pointer", userSelect:"none",
+              background:C.bg,
+              border:"1px solid #B0AEA8", color:C.textPri,
+              boxShadow:`0 3px 0 ${C.divider}`,
+            }}
+              onPointerDown={e => { e.currentTarget.style.transform="translateY(3px)"; e.currentTarget.style.boxShadow="none"; }}
+              onPointerUp={e => { e.currentTarget.style.transform=""; e.currentTarget.style.boxShadow=`0 3px 0 ${C.divider}`; }}
+              onPointerLeave={e => { e.currentTarget.style.transform=""; e.currentTarget.style.boxShadow=`0 3px 0 ${C.divider}`; }}
+            >{b.label}</div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+
+
+// ─────────────────────────────
+// 選手管理
+// ─────────────────────────────
+
+
+
+const INITIAL_PLAYERS = [
+  { id: 1, number: 1,  name: "近本 光司",   note: "" },
+  { id: 2, number: 8,  name: "中野 拓夢",   note: "" },
+  { id: 3, number: 99, name: "森下 翔太",   note: "" },
+  { id: 4, number: 6,  name: "大山 悠輔",   note: "" },
+  { id: 5, number: 5,  name: "佐藤 輝明",   note: "" },
+  { id: 6, number: 44, name: "ノイジー",    note: "" },
+  { id: 7, number: 2,  name: "木浪 聖也",   note: "" },
+  { id: 8, number: 27, name: "坂本 誠志郎", note: "" },
+  { id: 9, number: 18, name: "青柳 晃洋",   note: "" },
+];
+
+function PlayerManagement({ teamId, teamName }) {
+  const [players, setPlayers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [screen, setScreen] = useState("list");
+  const [editTarget, setEditTarget] = useState(null);
+  const [form, setForm] = useState({ name: "", number: "", note: "" });
+  const [error, setError] = useState({});
+
+  // Supabaseから選手を取得
+  useEffect(() => {
+    loadPlayers();
+  }, []);
+
+  const loadPlayers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("nsb_players")
+        .select("*")
+        .eq("team_id", teamId)
+        .order("number");
+      if (!error) setPlayers(data || []);
+    } catch(e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openNew = () => {
+    setForm({ name: '', number: '', note: '' });
+    setEditTarget(null);
+    setError({});
+    setScreen("form");
+  };
+
+  const openEdit = (player) => {
+    setForm({ name: player.name, number: String(player.number), note: player.note || "" });
+    setEditTarget(player.id);
+    setError({});
+    setScreen("form");
+  };
+
+  const validate = () => {
+    const e = {};
+    if (!form.name.trim()) e.name = "名前を入力してください";
+    if (!form.number || isNaN(form.number) || form.number < 0 || form.number > 99) e.number = "0〜99の数字を入力してください";
+    return e;
+  };
+
+  const handleSave = async () => {
+    const e = validate();
+    if (Object.keys(e).length) { setError(e); return; }
+
+    // 背番号重複チェック（編集時は自分自身を除外）
+    const num = parseInt(form.number);
+    const dup = players.find(p => p.number === num && p.id !== editTarget);
+    if (dup) {
+      // 警告を表示して確認を促す（保存はそのまま続行）
+      setError({ numberWarn: `背番号 ${num} はすでに ${dup.name} で登録されています。このまま保存しますか？` });
+      return;
+    }
+
+    await doSave();
+  };
+
+  const doSave = async () => {
+    setError({});
+    setScreen("list");
+    if (editTarget) {
+      await supabase.from("nsb_players").update({
+        name: form.name, number: parseInt(form.number), note: form.note
+      }).eq("id", editTarget);
+    } else {
+      await supabase.from("nsb_players").insert({
+        team_id: teamId, name: form.name, number: parseInt(form.number), note: form.note
+      });
+    }
+    await loadPlayers();
+  };
+
+  const handleDelete = async (id) => {
+    setScreen("list");  // 先に画面を戻す
+    await supabase.from("nsb_players").delete().eq("id", id);
+    await loadPlayers();
+  };
+
+  const sorted = [...players].sort((a, b) => a.number - b.number);
+
+  // ── 選手一覧 ──
+  if (loading) return (
+    <div style={{ padding:"40px", textAlign:"center", color: C.textTer, fontSize:13 }}>読み込み中...</div>
+  );
+
+  if (screen === "list") return (
+    <div style={{ background: C.bg, minHeight: "100vh", width: "100%", fontFamily: "'Noto Sans JP', sans-serif" }}>
+      {/* ヘッダー（ホームと同じダークグリーン） */}
+      <div style={{ background: C.scoreBg, padding: "20px 20px 24px" }}>
+        <div style={{ fontSize: 9, color: C.scoreSubText, letterSpacing: "0.15em", marginBottom: 8, opacity: 0.8 }}>NEO SCORE BOOK</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+          <div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: C.scoreText, marginBottom: 2 }}>選手一覧</div>
+            <div style={{ fontSize: 12, color: C.scoreSubText }}>{teamName}　{players.length}名登録中</div>
+          </div>
+          <div
+            onClick={openNew}
+            style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 18px", borderRadius: 50, background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)", cursor: "pointer", userSelect: "none" }}
+            onPointerDown={e => e.currentTarget.style.opacity = "0.7"}
+            onPointerUp={e => e.currentTarget.style.opacity = "1"}
+            onPointerLeave={e => e.currentTarget.style.opacity = "1"}
+          >
+            <Plus size={14} color={C.scoreText} strokeWidth={2.5}/>
+            <span style={{ fontSize: 13, fontWeight: 700, color: C.scoreText }}>登録</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 選手リスト */}
+      <div style={{ padding: "16px 16px 32px" }}>
+        <div style={{ background: C.card, borderRadius: 16, overflow: "hidden", boxShadow: C.cardShadow }}>
+          {sorted.map((p, i) => (
+            <div key={p.id}
+              onClick={() => openEdit(p)}
+              style={{ display: "flex", alignItems: "center", padding: "12px 16px", borderBottom: i < sorted.length - 1 ? `1px solid ${C.divider}` : "none", cursor: "pointer" }}
+              onPointerDown={e => e.currentTarget.style.background = C.brandLight}
+              onPointerUp={e => e.currentTarget.style.background = "transparent"}
+              onPointerLeave={e => e.currentTarget.style.background = "transparent"}
+            >
+              {/* 背番号バッジ */}
+              <div style={{ width: 40, height: 40, borderRadius: "50%", background: C.brandLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginRight: 14 }}>
+                <span style={{ fontSize: 13, fontWeight: 800, color: C.brand }}>{p.number}</span>
+              </div>
+              {/* 氏名・備考 */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 600, color: C.textPri }}>{p.name}</div>
+                {p.note && <div style={{ fontSize: 11, color: C.textTer, marginTop: 2 }}>{p.note}</div>}
+              </div>
+              <ChevronRight size={16} color={C.textTer}/>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  // ── 選手登録/編集 ──
+  return (
+    <div style={{ background: C.bg, minHeight: "100vh", width: "100%", fontFamily: "'Noto Sans JP', sans-serif" }}>
+      {/* ヘッダー */}
+      <div style={{ background: C.card, padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 1px 0 #F0F0F0" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div onClick={() => setScreen("list")} style={{ cursor: "pointer", padding: 4 }}>
+            <X size={20} color={C.textSec}/>
+          </div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: C.textPri }}>
+            {editTarget ? "選手を編集" : "選手を登録"}
+          </div>
+        </div>
+        <div
+          onClick={handleSave}
+          style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 50, background: C.brand, cursor: "pointer", userSelect: "none", boxShadow: "0 2px 8px rgba(61,107,61,0.3)" }}
+          onPointerDown={e => e.currentTarget.style.opacity = "0.8"}
+          onPointerUp={e => e.currentTarget.style.opacity = "1"}
+          onPointerLeave={e => e.currentTarget.style.opacity = "1"}
+        >
+          <span style={{ fontSize:13, color:C.brandText }}>✓</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: C.brandText }}>保存</span>
+        </div>
+      </div>
+
+      {/* フォーム */}
+      <div style={{ padding: "16px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
+
+        {/* 名前 */}
+        <div style={{ background: C.card, borderRadius: 14, padding: "14px 16px", boxShadow: C.cardShadow }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.textTer, letterSpacing: "0.08em", marginBottom: 8 }}>選手名</div>
+          <input
+            type="text"
+            placeholder="例：近本 光司"
+            value={form.name}
+            onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+            style={{ width: "100%", border: "none", outline: "none", fontSize: 16, color: C.textPri, background: "transparent", fontFamily: "inherit" }}
+          />
+          {error.name && <div style={{ fontSize: 11, color: "#8B2020", marginTop: 6 }}>{error.name}</div>}
+        </div>
+
+        {/* 背番号 */}
+        <div style={{ background: C.card, borderRadius: 14, padding: "14px 16px", boxShadow: C.cardShadow }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.textTer, letterSpacing: "0.08em", marginBottom: 8 }}>背番号</div>
+          <input
+            type="number"
+            placeholder="0〜99"
+            value={form.number}
+            onChange={e => setForm(f => ({ ...f, number: e.target.value }))}
+            style={{ width: "100%", border: "none", outline: "none", fontSize: 16, color: C.textPri, background: "transparent", fontFamily: "inherit" }}
+          />
+          {error.number && <div style={{ fontSize: 11, color: "#8B2020", marginTop: 6 }}>{error.number}</div>}
+          {error.numberWarn && (
+            <div style={{ marginTop: 10, padding: "10px 12px", background: "#FFF8E8", border: "1px solid #E8C84A", borderRadius: 8 }}>
+              <div style={{ fontSize: 12, color: "#7A5800", marginBottom: 8 }}>⚠️ {error.numberWarn}</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <div onClick={() => setError({})} style={{ flex: 1, padding: "7px", borderRadius: 6, border: "1px solid #D0C8A8", textAlign: "center", fontSize: 12, fontWeight: 600, color: "#7A5800", cursor: "pointer", background: "#FFF" }}>キャンセル</div>
+                <div onClick={doSave} style={{ flex: 1, padding: "7px", borderRadius: 6, background: "#E8A020", textAlign: "center", fontSize: 12, fontWeight: 700, color: "#FFF", cursor: "pointer" }}>このまま保存</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 備考 */}
+        <div style={{ background: C.card, borderRadius: 14, padding: "14px 16px", boxShadow: C.cardShadow }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.textTer, letterSpacing: "0.08em", marginBottom: 8 }}>備考</div>
+          <textarea
+            placeholder="例：投手兼外野手、キャプテンなど"
+            value={form.note}
+            onChange={e => setForm(f => ({ ...f, note: e.target.value }))}
+            rows={3}
+            style={{ width: "100%", border: "none", outline: "none", fontSize: 14, color: C.textPri, background: "transparent", fontFamily: "inherit", resize: "none", lineHeight: 1.6 }}
+          />
+        </div>
+
+        {/* 削除ボタン（編集時のみ） */}
+        {editTarget && (
+          <div
+            onClick={() => handleDelete(editTarget)}
+            style={{ padding: "14px", borderRadius: 14, textAlign: "center", fontSize: 14, fontWeight: 700, color: "#8B2020", background: "#FFF0F0", cursor: "pointer", userSelect: "none" }}
+            onPointerDown={e => e.currentTarget.style.opacity = "0.7"}
+            onPointerUp={e => e.currentTarget.style.opacity = "1"}
+            onPointerLeave={e => e.currentTarget.style.opacity = "1"}
+          >
+            この選手を削除
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────
+// オーダー登録
+// ─────────────────────────────
+
+
+const POSITIONS = ["-", "投", "捕", "一", "二", "三", "遊", "左", "中", "右", "DH"];
+
+const MY_PLAYERS = [
+  { id: 1,  number: 1,  name: "近本 光司" },
+  { id: 2,  number: 8,  name: "中野 拓夢" },
+  { id: 3,  number: 99, name: "森下 翔太" },
+  { id: 4,  number: 6,  name: "大山 悠輔" },
+  { id: 5,  number: 5,  name: "佐藤 輝明" },
+  { id: 6,  number: 44, name: "ノイジー" },
+  { id: 7,  number: 2,  name: "木浪 聖也" },
+  { id: 8,  number: 27, name: "坂本 誠志郎" },
+  { id: 9,  number: 18, name: "青柳 晃洋" },
+  { id: 10, number: 14, name: "西 勇輝" },
+  { id: 11, number: 31, name: "岩崎 優" },
+];
+
+const PAST_TEAMS = [
+  {
+    id: 1, name: "巨人",
+    players: [
+      { id: 101, number: 7,  name: "丸 佳浩" },
+      { id: 102, number: 6,  name: "吉川 尚輝" },
+      { id: 103, number: 3,  name: "岡本 和真" },
+      { id: 104, number: 25, name: "ブリンソン" },
+      { id: 105, number: 55, name: "秋広 優人" },
+      { id: 106, number: 9,  name: "坂本 勇人" },
+      { id: 107, number: 34, name: "オコエ 瑠偉" },
+      { id: 108, number: 32, name: "大城 卓三" },
+      { id: 109, number: 17, name: "菅野 智之" },
+    ],
+    lastOrder: [
+      { order: 1, playerId: 101, pos: "中" },
+      { order: 2, playerId: 102, pos: "二" },
+      { order: 3, playerId: 103, pos: "一" },
+      { order: 4, playerId: 104, pos: "右" },
+      { order: 5, playerId: 105, pos: "三" },
+      { order: 6, playerId: 106, pos: "遊" },
+      { order: 7, playerId: 107, pos: "左" },
+      { order: 8, playerId: 108, pos: "捕" },
+      { order: 9, playerId: 109, pos: "投" },
+    ],
+  },
+  { id: 2, name: "中日", players: [], lastOrder: [] },
+  { id: 3, name: "広島", players: [], lastOrder: [] },
+];
+
+const makeEmptyOrder = () =>
+  Array.from({ length: 9 }, (_, i) => ({ order: i + 1, playerId: null, pos: "-" }));
+
+// ── ドラッグ可能なオーダー行 ──
+function OrderRow({ row, idx, players, stamenIds, onPlayerChange, onPosChange, onDragStart, onDragOver, onDrop, isLast }) {
+  const player = players.find(p => p.id === row.playerId);
+  const selectStyle = {
+    border: "none", outline: "none", background: "transparent",
+    fontSize: 13, color: C.textPri, fontFamily: "inherit",
+    cursor: "pointer", appearance: "none", WebkitAppearance: "none",
+  };
+
+  return (
+    <div
+      draggable
+      onDragStart={() => onDragStart(idx)}
+      onDragOver={e => { e.preventDefault(); onDragOver(idx); }}
+      onDrop={onDrop}
+      style={{ display: "flex", alignItems: "center", padding: "10px 12px", borderBottom: !isLast ? `1px solid ${C.divider}` : "none", gap: 8, background: C.card }}
+    >
+      <div style={{ cursor: "grab", color: C.textTer, flexShrink: 0 }}><GripVertical size={16}/></div>
+      <div style={{ width: 20, height: 20, borderRadius: "50%", background: C.brandLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <span style={{ fontSize: 11, fontWeight: 800, color: C.brand }}>{row.order}</span>
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <select value={row.playerId || ""} onChange={e => onPlayerChange(row.order, e.target.value)}
+          style={{ ...selectStyle, width: "100%", fontSize: 14, fontWeight: player ? 600 : 400, color: player ? C.textPri : C.textTer }}>
+          <option value="">-- 選択 --</option>
+          {players.map(p => (
+            <option key={p.id} value={p.id} disabled={stamenIds.includes(p.id) && p.id !== row.playerId}>
+              #{p.number} {p.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div style={{ width: 44, display: "flex", alignItems: "center", justifyContent: "center", background: C.brandLight, borderRadius: 8, padding: "4px 2px" }}>
+        <select value={row.pos} onChange={e => onPosChange(row.order, e.target.value)}
+          style={{ ...selectStyle, fontSize: 13, fontWeight: 700, color: C.brand, textAlign: "center", width: "100%" }}>
+          {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+      </div>
+    </div>
+  );
+}
+
+// ── 自チームタブ ──
+function MyTeamTab({ teamId, onLineupChange }) {
+  const [lineup, setLineup] = useState(
+    Array.from({ length: 9 }, (_, i) => ({ order: i + 1, playerId: null, pos: "-" }))
+  );
+  const [players, setPlayers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newPlayer, setNewPlayer] = useState({ name: "", number: "" });
+  const [prevOrder, setPrevOrder] = useState(null);
+  const dragIdx = useRef(null);
+  const dragOverIdx = useRef(null);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    setLoading(true);
+    const [playersRes, prevGameRes] = await Promise.all([
+      supabase.from("nsb_players").select("*").eq("team_id", teamId).order("number"),
+      supabase.from("nsb_games").select("game_state, game_date").not("game_state", "is", null).order("created_at", { ascending: false }).limit(1),
+    ]);
+    const loadedPlayers = playersRes.data || [];
+    setPlayers(loadedPlayers);
+    const prev = prevGameRes.data?.[0];
+    const notify = (nl) => {
+      if (onLineupChange) onLineupChange(nl.map(r => ({ ...r, player: loadedPlayers.find(p => p.id === r.playerId) })));
+    };
+    if (prev?.game_state?.lineup?.length > 0) {
+      setPrevOrder({ lineup: prev.game_state.lineup, date: prev.game_date });
+    }
+    setLoading(false);
+  };
+
+  const loadPlayers = loadData;
+
+  const stamenIds = lineup.map(l => l.playerId).filter(Boolean);
+  const bench = players.filter(p => !stamenIds.includes(p.id));
+
+  const notifyLineup = (newLineup) => {
+    if (onLineupChange) onLineupChange(newLineup.map(r => ({ ...r, player: players.find(p => p.id === r.playerId) })));
+  };
+  const updatePlayer = (order, val) => {
+    const newLineup = lineup.map(r => r.order === order ? { ...r, playerId: parseInt(val) || null } : r);
+    setLineup(newLineup); notifyLineup(newLineup);
+  };
+  const updatePos = (order, pos) => {
+    const newLineup = lineup.map(r => r.order === order ? { ...r, pos } : r);
+    setLineup(newLineup); notifyLineup(newLineup);
+  };
+
+  const applyPrevOrder = () => {
+    let newLineup;
+    if (prevOrder) {
+      const playerIds = new Set(players.map(p => p.id));
+      newLineup = prevOrder.lineup.map(r => ({
+        order: r.order,
+        playerId: playerIds.has(r.playerId) ? r.playerId : null,
+        pos: r.pos || "-",
+      }));
+    } else {
+      const defaultPos = ["投", "捕", "一", "二", "三", "遊", "左", "中", "右"];
+      const sorted = [...players].sort((a, b) => a.number - b.number);
+      newLineup = Array.from({ length: 9 }, (_, i) => ({
+        order: i + 1,
+        playerId: sorted[i]?.id ?? null,
+        pos: defaultPos[i] || "-",
+      }));
+    }
+    setLineup(newLineup);
+    notifyLineup(newLineup);
+  };
+
+  const handleDrop = () => {
+    if (dragIdx.current === null || dragOverIdx.current === null) return;
+    const arr = [...lineup];
+    const [moved] = arr.splice(dragIdx.current, 1);
+    arr.splice(dragOverIdx.current, 0, moved);
+    setLineup(arr.map((r, i) => ({ ...r, order: i + 1 })));
+    dragIdx.current = null; dragOverIdx.current = null;
+  };
+
+  const addPlayer = async () => {
+    if (!newPlayer.name.trim() || !newPlayer.number) return;
+    const { data } = await supabase
+      .from("nsb_players")
+      .insert({ team_id: teamId, name: newPlayer.name, number: parseInt(newPlayer.number), note: "" })
+      .select()
+      .single();
+    if (data) setPlayers(p => [...p, data]);
+    setNewPlayer({ name: "", number: "" });
+    setShowAddForm(false);
+  };
+
+  if (loading) return (
+    <div style={{ padding:"40px", textAlign:"center", color: C.textTer, fontSize:13 }}>読み込み中...</div>
+  );
+
+  return (
+    <div>
+      {/* 前回オーダーボタン */}
+      {players.length > 0 && (
+        <div
+          onClick={applyPrevOrder}
+          style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px", marginBottom: 10, borderRadius: 14, background: C.brandLight, border: `1.5px solid ${C.brand}`, cursor: "pointer", userSelect: "none" }}
+          onPointerDown={e => e.currentTarget.style.opacity = "0.7"}
+          onPointerUp={e => e.currentTarget.style.opacity = "1"}
+          onPointerLeave={e => e.currentTarget.style.opacity = "1"}
+        >
+          <span style={{ fontSize: 16 }}>🕐</span>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.brand }}>前回のオーダーを使う</div>
+            <div style={{ fontSize: 11, color: C.textSec, marginTop: 1 }}>
+              {prevOrder ? prevOrder.date : "初回：背番号順・守備位置デフォルトでセット"}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* テーブルヘッダー */}
+      <div style={{ display: "flex", alignItems: "center", padding: "0 12px 6px", gap: 8 }}>
+        <div style={{ width: 24 }}/><div style={{ width: 20 }}/>
+        <div style={{ flex: 1, fontSize: 10, color: C.textTer, fontWeight: 600 }}>選手</div>
+        <div style={{ width: 44, fontSize: 10, color: C.textTer, fontWeight: 600, textAlign: "center" }}>位置</div>
+      </div>
+
+      {/* スタメン */}
+      <div style={{ background: C.card, borderRadius: 14, overflow: "hidden", boxShadow: C.cardShadow, marginBottom: 8 }}>
+        {lineup.map((row, idx) => (
+          <OrderRow key={row.order} row={row} idx={idx} players={players} stamenIds={stamenIds}
+            onPlayerChange={updatePlayer} onPosChange={updatePos}
+            onDragStart={i => { dragIdx.current = i; }} onDragOver={i => { dragOverIdx.current = i; }} onDrop={handleDrop}
+            isLast={idx === 8}
+          />
+        ))}
+      </div>
+
+      {/* 新規選手追加ボタン */}
+      <div onClick={() => setShowAddForm(s => !s)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", marginBottom: 8, cursor: "pointer", userSelect: "none" }}>
+        <Plus size={14} color={C.brand}/>
+        <span style={{ fontSize: 12, fontWeight: 600, color: C.brand }}>選手をその場で追加</span>
+      </div>
+
+      {/* 新規選手フォーム */}
+      {showAddForm && (
+        <div style={{ background: C.card, borderRadius: 14, padding: "14px 16px", boxShadow: C.cardShadow, marginBottom: 8, display: "flex", gap: 8, alignItems: "center" }}>
+          <input placeholder="名前" value={newPlayer.name} onChange={e => setNewPlayer(n => ({ ...n, name: e.target.value }))}
+            style={{ flex: 1, border: "none", borderBottom: `1px solid ${C.divider}`, outline: "none", fontSize: 13, padding: "4px 0", fontFamily: "inherit" }}/>
+          <input placeholder="#" type="number" value={newPlayer.number} onChange={e => setNewPlayer(n => ({ ...n, number: e.target.value }))}
+            style={{ width: 40, border: "none", borderBottom: `1px solid ${C.divider}`, outline: "none", fontSize: 13, padding: "4px 0", textAlign: "center", fontFamily: "inherit" }}/>
+          <div onClick={addPlayer} style={{ padding: "6px 12px", borderRadius: 20, background: C.brand, fontSize: 12, fontWeight: 700, color: C.brandText, cursor: "pointer" }}>追加</div>
+          <X size={16} color={C.textTer} style={{ cursor: "pointer" }} onClick={() => setShowAddForm(false)}/>
+        </div>
+      )}
+
+      {/* 控え */}
+      <div style={{ fontSize: 10, fontWeight: 700, color: C.textTer, letterSpacing: "0.08em", margin: "12px 0 8px" }}>控え</div>
+      <div style={{ background: C.card, borderRadius: 14, overflow: "hidden", boxShadow: C.cardShadow }}>
+        {bench.length === 0
+          ? <div style={{ padding: "14px 16px", fontSize: 13, color: C.textTer, textAlign: "center" }}>控え選手なし</div>
+          : bench.map((p, i) => (
+            <div key={p.id} style={{ display: "flex", alignItems: "center", padding: "10px 16px", borderBottom: i < bench.length - 1 ? `1px solid ${C.divider}` : "none", gap: 10 }}>
+              <div style={{ width: 28, height: 28, borderRadius: "50%", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: C.textSec }}>{p.number}</span>
+              </div>
+              <span style={{ fontSize: 13, color: C.textSec }}>{p.name}</span>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  );
+}
+
+// ── 相手チームオーダー行 ──
+function OpponentOrderRow({ row, idx, onNameChange, onNumberChange, onPosChange, onDragStart, onDragOver, onDrop, isLast }) {
+  const inputStyle = {
+    border: "none", outline: "none", background: "transparent",
+    fontSize: 13, fontFamily: "inherit", padding: "2px 0",
+    borderBottom: `1px solid ${C.divider}`,
+  };
+  return (
+    <div
+      draggable
+      onDragStart={() => onDragStart(idx)}
+      onDragOver={e => { e.preventDefault(); onDragOver(idx); }}
+      onDrop={onDrop}
+      style={{ display: "flex", alignItems: "center", padding: "10px 12px", borderBottom: !isLast ? `1px solid ${C.divider}` : "none", gap: 8, background: C.card }}
+    >
+      <div style={{ cursor: "grab", color: C.textTer, flexShrink: 0 }}><GripVertical size={16}/></div>
+      <div style={{ width: 20, height: 20, borderRadius: "50%", background: C.brandLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <span style={{ fontSize: 11, fontWeight: 800, color: C.brand }}>{row.order}</span>
+      </div>
+      <input
+        inputMode="numeric"
+        placeholder="#"
+        value={row.number}
+        onChange={e => onNumberChange(row.order, e.target.value)}
+        style={{ ...inputStyle, width: 36, textAlign: "center", color: C.textSec }}
+      />
+      <input
+        placeholder="選手名"
+        value={row.name}
+        onChange={e => onNameChange(row.order, e.target.value)}
+        style={{ ...inputStyle, flex: 1, color: C.textPri, fontWeight: row.name ? 600 : 400 }}
+      />
+      <div style={{ width: 44, display: "flex", alignItems: "center", justifyContent: "center", background: C.brandLight, borderRadius: 8, padding: "4px 2px" }}>
+        <select value={row.pos} onChange={e => onPosChange(row.order, e.target.value)}
+          style={{ border: "none", outline: "none", background: "transparent", fontSize: 13, fontWeight: 700, color: C.brand, textAlign: "center", width: "100%", appearance: "none", WebkitAppearance: "none", cursor: "pointer", fontFamily: "inherit" }}>
+          {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+      </div>
+    </div>
+  );
+}
+
+// ── 相手チームタブ ──
+function OpponentTab({ onLineupChange, onTeamNameChange }) {
+  const [step, setStep] = useState("select");
+  const [teamName, setTeamName] = useState("");
+  const [lineup, setLineup] = useState(
+    Array.from({ length: 9 }, (_, i) => ({ order: i + 1, number: "", name: "", pos: "-" }))
+  );
+  const [pastTeams, setPastTeams] = useState([
+    { name: "テストチーム", date: "2026-06-01", lineup: [
+      { order:1, number:"1", name:"1番選手", pos:"中" },
+      { order:2, number:"2", name:"2番選手", pos:"遊" },
+      { order:3, number:"3", name:"3番選手", pos:"右" },
+      { order:4, number:"4", name:"4番選手", pos:"一" },
+      { order:5, number:"5", name:"5番選手", pos:"三" },
+      { order:6, number:"6", name:"6番選手", pos:"左" },
+      { order:7, number:"7", name:"7番選手", pos:"捕" },
+      { order:8, number:"8", name:"8番選手", pos:"二" },
+      { order:9, number:"9", name:"9番選手", pos:"投" },
+    ]},
+  ]);
+  const [pastOpen, setPastOpen] = useState(false);
+  const dragIdx = useRef(null);
+  const dragOverIdx = useRef(null);
+
+  useEffect(() => {
+    supabase
+      .from("nsb_games")
+      .select("opponent, game_state, game_date")
+      .not("game_state", "is", null)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (!data) return;
+        const seen = new Set();
+        const teams = [];
+        for (const g of data) {
+          if (!g.game_state?.oppLineup?.length || seen.has(g.opponent)) continue;
+          seen.add(g.opponent);
+          teams.push({ name: g.opponent, lineup: g.game_state.oppLineup, date: g.game_date });
+        }
+        setPastTeams(teams);
+      });
+  }, []);
+
+  const notify = (nl) => {
+    if (onLineupChange) onLineupChange(nl.map(r => ({ ...r, number: parseInt(r.number) || 0, name: r.name.trim() })));
+  };
+
+  const goToOrder = (name, nl = lineup) => {
+    if (onTeamNameChange) onTeamNameChange(name);
+    notify(nl);
+    setStep("order");
+  };
+
+  const selectPast = (team) => {
+    const preLineup = team.lineup.map(r => ({
+      order: r.order, number: r.number ? String(r.number) : "", name: r.name || "", pos: r.pos || "-",
+    }));
+    setTeamName(team.name);
+    setLineup(preLineup);
+    goToOrder(team.name, preLineup);
+  };
+
+  const update = (order, field, val) => {
+    const nl = lineup.map(r => r.order === order ? { ...r, [field]: val } : r);
+    setLineup(nl);
+    notify(nl);
+  };
+
+  const handleDrop = () => {
+    if (dragIdx.current === null || dragOverIdx.current === null) return;
+    const arr = [...lineup];
+    const [moved] = arr.splice(dragIdx.current, 1);
+    arr.splice(dragOverIdx.current, 0, moved);
+    const nl = arr.map((r, i) => ({ ...r, order: i + 1 }));
+    setLineup(nl);
+    notify(nl);
+    dragIdx.current = null; dragOverIdx.current = null;
+  };
+
+  if (step === "select") return (
+    <div>
+      <div style={{ background: C.card, borderRadius: 14, padding: "14px 16px", boxShadow: C.cardShadow, display: "flex", gap: 8, alignItems: "center", marginBottom: pastTeams.length > 0 ? 12 : 0 }}>
+        <input
+          placeholder="相手チーム名を入力"
+          value={teamName}
+          onChange={e => setTeamName(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && teamName.trim() && goToOrder(teamName.trim())}
+          style={{ flex: 1, border: "none", borderBottom: `1px solid ${C.divider}`, outline: "none", fontSize: 14, padding: "4px 0", fontFamily: "inherit" }}
+        />
+        <div
+          onClick={() => teamName.trim() && goToOrder(teamName.trim())}
+          style={{ padding: "8px 14px", borderRadius: 20, background: teamName.trim() ? C.brand : C.bg, fontSize: 13, fontWeight: 700, color: teamName.trim() ? C.brandText : C.textTer, cursor: teamName.trim() ? "pointer" : "default", transition: "background 0.15s" }}
+        >次へ</div>
+      </div>
+
+      {pastTeams.length > 0 && (
+        <>
+          <div
+            onClick={() => setPastOpen(o => !o)}
+            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: C.card, borderRadius: pastOpen ? "14px 14px 0 0" : 14, boxShadow: C.cardShadow, cursor: "pointer", userSelect: "none" }}
+          >
+            <span style={{ fontSize: 13, fontWeight: 700, color: C.textPri }}>過去の対戦チームから選ぶ</span>
+            <ChevronDown size={16} color={C.textTer} style={{ transform: pastOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}/>
+          </div>
+          {pastOpen && (
+            <div style={{ background: C.card, borderRadius: "0 0 14px 14px", overflow: "hidden", boxShadow: C.cardShadow }}>
+              <div style={{ height: "0.5px", background: C.divider }}/>
+              {pastTeams.map((team, i) => (
+                <div key={team.name} onClick={() => selectPast(team)}
+                  style={{ display: "flex", alignItems: "center", padding: "14px 16px", borderBottom: i < pastTeams.length - 1 ? `1px solid ${C.divider}` : "none", cursor: "pointer" }}
+                  onPointerDown={e => e.currentTarget.style.background = C.brandLight}
+                  onPointerUp={e => e.currentTarget.style.background = "transparent"}
+                  onPointerLeave={e => e.currentTarget.style.background = "transparent"}
+                >
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: C.textPri }}>{team.name}</div>
+                    <div style={{ fontSize: 11, color: C.textTer, marginTop: 2 }}>{team.date} の記録</div>
+                  </div>
+                  <span style={{ fontSize: 11, color: C.brand, fontWeight: 600 }}>使う →</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: C.textPri }}>{teamName}</div>
+        <span onClick={() => setStep("select")} style={{ fontSize: 12, color: C.brand, cursor: "pointer", borderBottom: `1px dashed ${C.brand}` }}>チームを変更</span>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", padding: "0 12px 6px", gap: 8 }}>
+        <div style={{ width: 24 }}/><div style={{ width: 20 }}/>
+        <div style={{ width: 36, fontSize: 10, color: C.textTer, fontWeight: 600, textAlign: "center" }}>#</div>
+        <div style={{ flex: 1, fontSize: 10, color: C.textTer, fontWeight: 600, marginLeft: 8 }}>選手名</div>
+        <div style={{ width: 44, fontSize: 10, color: C.textTer, fontWeight: 600, textAlign: "center" }}>位置</div>
+      </div>
+
+      <div style={{ background: C.card, borderRadius: 14, overflow: "hidden", boxShadow: C.cardShadow }}>
+        {lineup.map((row, idx) => (
+          <OpponentOrderRow key={row.order} row={row} idx={idx}
+            onNameChange={(order, val) => update(order, "name", val)}
+            onNumberChange={(order, val) => update(order, "number", val)}
+            onPosChange={(order, val) => update(order, "pos", val)}
+            onDragStart={i => { dragIdx.current = i; }} onDragOver={i => { dragOverIdx.current = i; }} onDrop={handleDrop}
+            isLast={idx === 8}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── メイン ──
+function OrderRegistration({ onNext, onBack, teamId }) {
+  const [tab, setTab] = useState("my");
+  const [myLineup, setMyLineup] = useState([]);
+  const [oppLineup, setOppLineup] = useState([]);
+  const [oppTeamName, setOppTeamName] = useState("");
+  const [orderErrors, setOrderErrors] = useState([]);
+
+  const handleNext = () => {
+    const errors = [];
+
+    // 9人揃っているか（まだ何も設定していない場合を含む）
+    if (myLineup.length < 9) {
+      errors.push('オーダーが9人揃っていません');
+    } else {
+      // 選手未選択チェック
+      const emptyRows = myLineup.filter(r => !r.playerId);
+      if (emptyRows.length > 0)
+        errors.push(`${emptyRows.map(r => r.order + '番').join('・')} の選手が未選択です`);
+    }
+
+    // ポジション未設定チェック
+    const noPosRows = myLineup.filter(r => r.playerId && r.pos === '-');
+    if (noPosRows.length > 0)
+      errors.push(`${noPosRows.map(r => r.order + '番').join('・')} のポジションが未設定です`);
+
+    // ポジション重複チェック
+    const filledPos = myLineup.filter(r => r.pos && r.pos !== '-').map(r => r.pos);
+    const dupPos = [...new Set(filledPos.filter((p, i) => filledPos.indexOf(p) !== i))];
+    if (dupPos.length > 0)
+      errors.push(`「${dupPos.join('」「')}」が複数の選手に設定されています`);
+
+    if (errors.length > 0) { setOrderErrors(errors); return; }
+
+    setOrderErrors([]);
+    onNext({ myLineup, teamId, oppLineup, oppTeamName });
+  };
+
+  return (
+    <div style={{ background: C.bg, minHeight: "100vh", width: "100%", fontFamily: "'Noto Sans JP', sans-serif" }}>
+      {/* ヘッダー */}
+      <div style={{ background: C.card, padding: "16px 20px 0", boxShadow: "0 1px 0 #F0F0F0" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <div
+              onClick={onBack}
+              style={{ display:"flex", alignItems:"center", gap:2, padding:"4px 12px 4px 6px", borderRadius:20, background: C.bg, border:`1px solid ${C.divider}`, cursor:"pointer", userSelect:"none" }}
+              onPointerDown={e => e.currentTarget.style.opacity="0.6"}
+              onPointerUp={e => e.currentTarget.style.opacity="1"}
+              onPointerLeave={e => e.currentTarget.style.opacity="1"}
+            >
+              <i className="ti ti-chevron-left" style={{ fontSize:16, color: C.textSec }} aria-hidden="true"/>
+              <span style={{ fontSize:13, color: C.textSec, fontWeight:500 }}>戻る</span>
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: C.textTer }}>{new Date().toLocaleDateString("ja-JP", { month: "long", day: "numeric" })}</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: C.textPri }}>オーダー登録</div>
+            </div>
+          </div>
+          <div
+            onClick={handleNext}
+            style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 50, background: C.brand, cursor: "pointer", userSelect: "none", boxShadow: "0 2px 8px rgba(61,107,61,0.3)" }}
+            onPointerDown={e => e.currentTarget.style.opacity = "0.8"}
+            onPointerUp={e => e.currentTarget.style.opacity = "1"}
+            onPointerLeave={e => e.currentTarget.style.opacity = "1"}
+          >
+            <span style={{ fontSize: 13, fontWeight: 700, color: C.brandText }}>記録開始 →</span>
+          </div>
+        </div>
+
+        {/* タブ */}
+        <div style={{ display: "flex" }}>
+          {[{ id: "my", label: `自チーム` }, { id: "opp", label: "相手チーム" }].map(t => (
+            <div key={t.id} onClick={() => setTab(t.id)} style={{
+              flex: 1, padding: "10px 8px", textAlign: "center",
+              fontSize: 13, fontWeight: 600, cursor: "pointer", userSelect: "none",
+              color: tab === t.id ? C.brand : C.textTer,
+              borderBottom: tab === t.id ? `2px solid ${C.brand}` : "2px solid transparent",
+              transition: "color 0.15s, border-color 0.15s",
+            }}>{t.label}</div>
+          ))}
+        </div>
+      </div>
+
+      {/* バリデーションエラー */}
+      {orderErrors.length > 0 && (
+        <div style={{ margin: "12px 16px 0", padding: "12px 14px", background: "#FFF0F0", border: "1px solid #E88080", borderRadius: 10 }}>
+          {orderErrors.map((e, i) => (
+            <div key={i} style={{ fontSize: 12, color: "#8B2020", lineHeight: 1.6 }}>・{e}</div>
+          ))}
+        </div>
+      )}
+
+      {/* コンテンツ */}
+      <div style={{ padding: "16px 16px 32px" }}>
+        {tab === "my" ? <MyTeamTab teamId={teamId} onLineupChange={setMyLineup}/> : <OpponentTab onLineupChange={setOppLineup} onTeamNameChange={setOppTeamName}/>}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────
+// 試合記録
+// ─────────────────────────────
+function GameRecordScreen({ onBack, gameOrder, teamName }) {
+  const [activeView, setActiveView] = useState("record");
+  const [screen, setScreen] = useState("main");
+  const [history, setHistory] = useState([]);
+
+  // オーダーデータからactiveBattersAを構築
+  const activeBattersA = (gameOrder && gameOrder.myLineup && gameOrder.myLineup.length > 0)
+    ? gameOrder.myLineup
+        .filter(r => r.player)
+        .map(r => ({
+          order: r.order,
+          number: r.player.number,
+          name: r.player.name,
+          pos: r.pos || "-",
+        }))
+    : BATTERS_A;
+  const activeBattersB = (gameOrder?.oppLineup?.length > 0)
+    ? gameOrder.oppLineup
+    : BATTERS_B;
+  const oppTeamName = gameOrder?.oppTeamName || TEAM_B;
+  const activeTeamA = teamName || TEAM_A;
+
+  const [balls, setBalls] = useState(0);
+  const [strikes, setStrikes] = useState(0);
+  const [outs, setOuts] = useState(0);
+  const [inning, setInning] = useState(1);
+  const [isTop, setIsTop] = useState(true);
+  const [scoreA, setScoreA] = useState(0);
+  const [scoreB, setScoreB] = useState(0);
+  const [batterIdxA, setBatterIdxA] = useState(0);
+  const [batterIdxB, setBatterIdxB] = useState(-1);
+  const [runners, setRunners] = useState({ ...RUNNERS_INIT });
+  const [pitchCount, setPitchCount] = useState(0);
+  const [stateHistory, setStateHistory] = useState([]); // スナップショット履歴
+  const [toast, setToast] = useState(null);
+  const [alert, setAlert] = useState(null);
+  const toastTimer = useRef(null);
+
+  // 進塁確認フロー
+  const [pendingResult, setPendingResult] = useState(null);
+  const [runnerQueue, setRunnerQueue] = useState([]);
+  const [currentRunnerIdx, setCurrentRunnerIdx] = useState(0);
+  const [newRunners, setNewRunners] = useState({ ...RUNNERS_INIT });
+  const [runnerNames, setRunnerNames] = useState({ first: null, second: null, third: null });
+  const [newRunnerNames, setNewRunnerNames] = useState({ first: null, second: null, third: null });
+  const [pendingBatterBase, setPendingBatterBase] = useState(null);
+  const [pendingIsOut, setPendingIsOut] = useState(false);
+  const [pendingRunnerOuts, setPendingRunnerOuts] = useState(0);
+  const [selectedBase, setSelectedBase] = useState(null);
+
+  // 試合終了モーダル
+  const [showEndModal, setShowEndModal] = useState(false);
+  const [endStep, setEndStep] = useState("menu"); // "menu" | "cold_reason" | "confirm" | "success"
+  const [endType, setEndType] = useState(null);   // "completed" | "in_progress" | "cold"
+  const [coldReason, setColdReason] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // ── gameLog：経過ビューと共有するデータ ──
+  const pitcherB = activeBattersB.find(b => b.pos === "投") ?? activeBattersB[8] ?? PITCHER_B;
+  const getPitcherNumber = (top) => top ? pitcherB.number : (activeBattersA.find(b => b.pos === "投")?.number ?? PITCHER_A.number);
+
+  const initHalf = (inn, top, batters, idx) => ({
+    inning: inn, topBottom: top ? "表" : "裏",
+    atBats: [{ ...makeBat(batters[idx % 9], getPitcherNumber(top), { first: false, second: false, third: false }) }],
+  });
+
+  const [gameLog, setGameLog] = useState([
+    initHalf(1, true, activeBattersA, 0)
+  ]);
+
+  // 現在のハーフイニングと打席へのアクセサ
+  const currentHalfIdx = gameLog.length - 1;
+  const currentHalf = gameLog[currentHalfIdx];
+  const currentAtBatIdx = currentHalf.atBats.length - 1;
+  const currentAtBat = currentHalf.atBats[currentAtBatIdx];
+
+  const batters = isTop ? activeBattersA : activeBattersB;
+  const batterIdx = isTop ? batterIdxA : batterIdxB;
+  const setBatterIdx = isTop ? setBatterIdxA : setBatterIdxB;
+  const pitcherA = activeBattersA.find(b => b.pos === "投") ?? PITCHER_A;
+  const pitcher = isTop ? pitcherB : pitcherA;
+  const batter = batters[batterIdx % 9];
+  const next1 = batters[(batterIdx + 1) % 9];
+  const next2 = batters[(batterIdx + 2) % 9];
+
+  const showToast = (msg) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast(msg);
+    toastTimer.current = setTimeout(() => setToast(null), 2000);
+  };
+  const goTo = (s) => { setHistory(h => [...h, screen]); setScreen(s); };
+  const goBack = () => {
+    if (!history.length) return;
+    setScreen(history[history.length - 1]);
+    setHistory(h => h.slice(0, -1));
+  };
+
+  // gameLog更新ヘルパー
+  const updateCurrentPitches = (updater) => {
+    setGameLog(log => {
+      const next = log.map((h, hi) => hi !== currentHalfIdx ? h : {
+        ...h,
+        atBats: h.atBats.map((ab, ai) => ai !== currentAtBatIdx ? ab : { ...ab, pitches: updater(ab.pitches) })
+      });
+      return next;
+    });
+  };
+
+  const addEvent = (event) => {
+    setGameLog(log => log.map((h, hi) => hi !== currentHalfIdx ? h : {
+      ...h,
+      atBats: h.atBats.map((ab, ai) => ai !== currentAtBatIdx ? ab : { ...ab, events: [...ab.events, event] })
+    }));
+  };
+
+  const closeCurrentAtBat = (result, runnersAfter = null) => {
+    setGameLog(log => log.map((h, hi) => hi !== currentHalfIdx ? h : {
+      ...h,
+      atBats: h.atBats.map((ab, ai) => ai !== currentAtBatIdx ? ab : {
+        ...ab, result,
+        runnersAfter: runnersAfter ?? runners,
+      })
+    }));
+  };
+
+  const openNextAtBat = (newIsTop, newInning, newBatters, newIdx, runnersSnapshot) => {
+    const top = newIsTop ?? isTop;
+    const inn = newInning ?? inning;
+    const bs = newBatters ?? batters;
+    const idx = newIdx ?? ((batterIdx + 1) % 9);
+    const player = bs[idx];
+    const snap = runnersSnapshot ?? runners;
+
+    setGameLog(log => {
+      // チェンジでハーフイニング追加
+      if (newIsTop !== undefined) {
+        return [...log, initHalf(inn, top, bs, idx % 9)];
+      }
+      // 同じハーフに打席追加
+      return log.map((h, hi) => hi !== currentHalfIdx ? h : {
+        ...h,
+        atBats: [...h.atBats, { ...makeBat(player, getPitcherNumber(top), { ...snap }) }]
+      });
+    });
+  };
+
+  const addScore = (n) => {
+    if (n <= 0) return;
+    if (isTop) {
+      const nextA = scoreA + n;
+      setScoreA(nextA);
+      setGameLog(log => log.map((h, hi) => hi !== currentHalfIdx ? h : {
+        ...h,
+        atBats: h.atBats.map((ab, ai) => ai !== currentAtBatIdx ? ab : {
+          ...ab, runsScored: (ab.runsScored||0) + n,
+          scoreAfterA: nextA, scoreAfterB: scoreB,
+        })
+      }));
+    } else {
+      const nextB = scoreB + n;
+      setScoreB(nextB);
+      setGameLog(log => log.map((h, hi) => hi !== currentHalfIdx ? h : {
+        ...h,
+        atBats: h.atBats.map((ab, ai) => ai !== currentAtBatIdx ? ab : {
+          ...ab, runsScored: (ab.runsScored||0) + n,
+          scoreAfterA: scoreA, scoreAfterB: nextB,
+        })
+      }));
+    }
+  };
+
+  const resetAtBat = () => { setBalls(0); setStrikes(0); };
+
+  const nextAtBat = (newIsTop, newInning, newBatters) => {
+    const newIdx = newIsTop !== undefined ? 0 : (batterIdx + 1) % 9;
+    setBatterIdx(newIsTop !== undefined ? (i => i) : (i => i + 1));
+    resetAtBat();
+    openNextAtBat(newIsTop, newInning, newBatters, newIdx);
+  };
+
+  const doOut = (runnersState, outTotal = outs + 1) => {
+    const no = outTotal;
+    if (no >= 3) {
+      showToast("チェンジ！");
+      setOuts(0);
+      setRunners({ ...RUNNERS_INIT });
+      const newTop = !isTop;
+      const newInn = !isTop ? inning + 1 : inning;
+      if (!isTop) setInning(i => i + 1);
+      setIsTop(newTop);
+      const newBatters = newTop ? activeBattersA : activeBattersB;
+      const newIdx = newTop ? (batterIdxA + 1) % 9 : (batterIdxB + 1) % 9;
+      if (newTop) setBatterIdxA(newIdx); else setBatterIdxB(newIdx);
+      setBalls(0); setStrikes(0);
+      setRunnerNames({ first: null, second: null, third: null });
+      setGameLog(log => [...log, initHalf(newInn, newTop, newBatters, newIdx)]);
+    } else {
+      setOuts(no);
+      if (runnersState) setRunners(runnersState);
+      setBatterIdx(i => i + 1);
+      resetAtBat();
+      openNextAtBat(undefined, undefined, undefined);
+    }
+  };
+
+  const advanceWalk = (currentRunners) => {
+    const r = currentRunners ?? runners;
+    const next = { ...r };
+    const nextNames = { ...runnerNames };
+    if (next.first && next.second && next.third) { addScore(1); nextNames.third = nextNames.second; nextNames.second = nextNames.first; }
+    else if (next.first && next.second) { next.third = true; nextNames.third = nextNames.second; nextNames.second = nextNames.first; }
+    else if (next.first) { next.second = true; nextNames.second = nextNames.first; }
+    else next.first = true;
+    nextNames.first = batter.name;
+    setRunners(next);
+    setRunnerNames(nextNames);
+    return next;
+  };
+
+  const buildRunnerQueue = (r, names) => {
+    const q = [];
+    if (r.first)  q.push({ base:"first",  label:"1塁", baseNum:1, name: names?.first ?? null });
+    if (r.second) q.push({ base:"second", label:"2塁", baseNum:2, name: names?.second ?? null });
+    if (r.third)  q.push({ base:"third",  label:"3塁", baseNum:3, name: names?.third ?? null });
+    return q;
+  };
+
+  const startRunnerFlow = (result, isOut, batterBase) => {
+    if (isOut && outs >= 2) {
+      showToast(result.label);
+      doOut(runners);
+      setScreen("main"); setHistory([]);
+      return;
+    }
+    const queue = buildRunnerQueue(runners, runnerNames);
+    setPendingResult(result);
+    setPendingBatterBase(batterBase);
+    setPendingIsOut(isOut);
+    setNewRunners({ ...RUNNERS_INIT });
+    setNewRunnerNames({ first: null, second: null, third: null });
+    setPendingRunnerOuts(0);
+    setCurrentRunnerIdx(0);
+    setRunnerQueue(queue);
+    if (queue.length === 0) {
+      finishAtBat(isOut, batterBase, { ...RUNNERS_INIT }, { first: null, second: null, third: null });
+      return;
+    }
+    if (isOut) { setScreen("askAdvance"); setHistory(h => [...h, "inplay"]); }
+    else { setScreen("runnerAdvance"); setHistory(h => [...h, "inplay"]); }
+  };
+
+  const handleInplayResult = (result) => {
+    // 特殊結果（死球・故意四球・振り逃げ）は専用ハンドラへ
+    if (result.special === "DB")  { handlePitch("DB");  setScreen("main"); setHistory([]); return; }
+    if (result.special === "IBB") { handlePitch("IBB"); setScreen("main"); setHistory([]); return; }
+    if (result.special === "振")  { handlePitch("振");  return; } // 画面遷移はhandleWildStrike内で処理
+    if (result.label.includes("本塁打") || result.label.includes("ホームラン")) {
+      const sc = (runners.first?1:0)+(runners.second?1:0)+(runners.third?1:0)+1;
+      closeCurrentAtBat(result.label, { ...RUNNERS_INIT }); // runnersAfter = 全員生還でリセット
+      addScore(sc);
+      setRunners({ ...RUNNERS_INIT });
+      showToast("ホームラン！");
+      setBatterIdx(i => i + 1); resetAtBat();
+      openNextAtBat(undefined, undefined, undefined, undefined, { ...RUNNERS_INIT });
+      setScreen("main"); setHistory([]); return;
+    }
+    closeCurrentAtBat(result.label);
+    if (result.dp) {
+      // 併殺打：askAdvance をスキップして直接ランナー進塁確認へ
+      const queue = buildRunnerQueue(runners, runnerNames);
+      setPendingResult(result); setPendingBatterBase(null); setPendingIsOut(true);
+      setNewRunners({ ...RUNNERS_INIT }); setNewRunnerNames({ first: null, second: null, third: null });
+      setPendingRunnerOuts(0); setCurrentRunnerIdx(0); setRunnerQueue(queue);
+      if (queue.length === 0) { finishAtBat(true, null, { ...RUNNERS_INIT }, { first: null, second: null, third: null }, 0); }
+      else { setScreen("runnerAdvance"); setHistory(h => [...h, "inplay"]); }
+      return;
+    }
+    startRunnerFlow(result, result.type === "out", result.batterBase ?? null);
+    setHistory(h => { const nh=[...h]; nh[nh.length-1]="inplay"; return nh; });
+  };
+
+  const handleAskAdvance = (yes) => {
+    if (!yes) { finishAtBat(true, null, runners, runnerNames); setScreen("main"); setHistory([]); }
+    else setScreen("runnerAdvance");
+  };
+
+  const handleRunnerAdvance = (toBase) => {
+    let score = 0;
+    const next = { ...newRunners };
+    const nextNames = { ...newRunnerNames };
+    const { name: runnerName } = runnerQueue[currentRunnerIdx];
+    const runnerOut = toBase === "out" ? 1 : 0;
+    if (toBase === 4) { score = 1; }
+    else if (toBase !== "out") {
+      if (toBase === 1) { next.first = true; nextNames.first = runnerName; }
+      if (toBase === 2) { next.second = true; nextNames.second = runnerName; }
+      if (toBase === 3) { next.third = true; nextNames.third = runnerName; }
+    }
+    addScore(score);
+    const nextIdx = currentRunnerIdx + 1;
+    const nextRunnerOuts = pendingRunnerOuts + runnerOut;
+    if (nextIdx >= runnerQueue.length) {
+      finishAtBat(pendingIsOut, pendingBatterBase, next, nextNames, nextRunnerOuts);
+      setScreen("main"); setHistory([]);
+    } else {
+      setNewRunners(next);
+      setNewRunnerNames(nextNames);
+      setPendingRunnerOuts(nextRunnerOuts);
+      setCurrentRunnerIdx(nextIdx);
+    }
+  };
+
+  const finishAtBat = (isOut, batterBase, finalRunners, finalRunnerNames, runnerOutCount = 0) => {
+    const fNames = finalRunnerNames ?? { first: null, second: null, third: null };
+    if (isOut) {
+      const totalOuts = outs + 1 + runnerOutCount;
+      const dpLabel = runnerOutCount >= 2 ? "トリプルプレー！" : runnerOutCount === 1 ? "ゲッツー！" : (pendingResult?.label ?? "アウト");
+      showToast(dpLabel);
+      setGameLog(log => log.map((h, hi) => hi !== currentHalfIdx ? h : {
+        ...h,
+        atBats: h.atBats.map((ab, ai) => ai !== currentAtBatIdx ? ab : { ...ab, runnersAfter: finalRunners })
+      }));
+      setRunnerNames(fNames);
+      doOut(finalRunners, totalOuts);
+    } else {
+      const next = { ...finalRunners };
+      const nextNames = { ...fNames };
+      if (batterBase === 1) {
+        if (next.first) { if (next.second) { if (next.third) { addScore(1); } else { next.third = true; nextNames.third = nextNames.second; } } next.second = true; nextNames.second = nextNames.first; }
+        next.first = true; nextNames.first = batter.name;
+      } else if (batterBase === 2) {
+        if (next.second) { if (next.third) { addScore(1); } else { next.third = true; nextNames.third = nextNames.second; } }
+        next.second = true; nextNames.second = batter.name;
+      } else if (batterBase === 3) {
+        if (next.third) addScore(1);
+        next.third = true; nextNames.third = batter.name;
+      }
+      showToast(pendingResult?.label ?? "出塁");
+      setGameLog(log => log.map((h, hi) => hi !== currentHalfIdx ? h : {
+        ...h,
+        atBats: h.atBats.map((ab, ai) => ai !== currentAtBatIdx ? ab : { ...ab, runnersAfter: next })
+      }));
+      setRunners(next);
+      setRunnerNames(nextNames);
+      setBatterIdx(i => i + 1); resetAtBat();
+      openNextAtBat(undefined, undefined, undefined, undefined, next);
+    }
+    setScreen("main");
+    setHistory([]);
+  };
+
+  const handleWildStrike = () => {
+    const queue = buildRunnerQueue(runners, runnerNames);
+    setPendingResult({ label:"振り逃げ", type:"safe" });
+    setPendingBatterBase(1); setPendingIsOut(false);
+    setNewRunners({ ...RUNNERS_INIT }); setNewRunnerNames({ first: null, second: null, third: null }); setCurrentRunnerIdx(0); setRunnerQueue(queue);
+    if (queue.length === 0) {
+      const nextRunners = advanceWalk(runners);
+      closeCurrentAtBat("振り逃げ", nextRunners);
+      showToast("振り逃げ");
+      setBatterIdx(i => i + 1); resetAtBat(); openNextAtBat(undefined, undefined, undefined, undefined, nextRunners);
+      setScreen("main"); setHistory([]); // どの画面から呼ばれてもmainに戻る
+    } else {
+      closeCurrentAtBat("振り逃げ");
+      setScreen("runnerAdvance"); setHistory(["main"]); // 絶対指定でhistoryをリセット
+    }
+  };
+
+  // スナップショットを保存
+  const saveSnapshot = () => {
+    setStateHistory(h => [...h, {
+      balls, strikes, outs, inning, isTop,
+      scoreA, scoreB, batterIdxA, batterIdxB,
+      runners: { ...runners }, runnerNames: { ...runnerNames }, pitchCount,
+      gameLog: JSON.parse(JSON.stringify(gameLog)),
+    }]);
+  };
+
+  // 試合保存
+  const saveGame = async (status, opts = {}) => {
+    setSaving(true);
+    try {
+      const payload = {
+        team_name: activeTeamA,
+        opponent: oppTeamName,
+        game_date: new Date().toISOString().split("T")[0],
+        status,
+        score_my: scoreA,
+        score_opp: scoreB,
+        end_inning: opts.endInning ?? inning,
+        end_reason: opts.reason || null,
+        game_log: gameLog,
+        game_state: status === "in_progress" ? {
+          inning, isTop, balls, strikes, outs,
+          runners, batterIdxA, batterIdxB, pitchCount,
+          lineup: activeBattersA,
+          oppTeamName, oppLineup: activeBattersB,
+        } : { lineup: activeBattersA, oppTeamName, oppLineup: activeBattersB },
+      };
+      const { error } = await supabase.from("nsb_games").insert(payload);
+      if (error) throw error;
+      setEndStep("success");
+    } catch (e) {
+      setAlert("保存に失敗しました: " + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // 1球取消（スナップショット巻き戻し）
+  const handleUndo = () => {
+    if (stateHistory.length === 0) return;
+    const prev = stateHistory[stateHistory.length - 1];
+    setBalls(prev.balls);
+    setStrikes(prev.strikes);
+    setOuts(prev.outs);
+    setInning(prev.inning);
+    setIsTop(prev.isTop);
+    setScoreA(prev.scoreA);
+    setScoreB(prev.scoreB);
+    setBatterIdxA(prev.batterIdxA);
+    setBatterIdxB(prev.batterIdxB);
+    setRunners(prev.runners);
+    if (prev.runnerNames) setRunnerNames(prev.runnerNames);
+    setPitchCount(prev.pitchCount);
+    setGameLog(prev.gameLog);
+    setStateHistory(h => h.slice(0, -1));
+    setScreen("main");
+    setHistory([]);
+    showToast("1球取消しました");
+  };
+
+  const handlePitch = (type) => {
+    if (type !== "IP") saveSnapshot(); // IPはhandleInplayResultで保存
+    setPitchCount(c => c + 1);
+    updateCurrentPitches(p => [...p, type]);
+    if (type === "B") {
+      const nb = balls + 1;
+      if (nb >= 4) {
+        const nextRunners = advanceWalk(runners);
+        closeCurrentAtBat("フォアボール", nextRunners);
+        showToast("フォアボール");
+        setBatterIdx(i => i + 1); resetAtBat(); openNextAtBat(undefined, undefined, undefined, undefined, nextRunners);
+      } else setBalls(nb);
+    } else if (type === "見逃" || type === "空振") {
+      const ns = strikes + 1;
+      if (ns >= 3) {
+        const strikeoutLabel = type === "見逃" ? "三振（K）" : "三振（KS）";
+        closeCurrentAtBat(strikeoutLabel, runners);
+        showToast(strikeoutLabel);
+        doOut(runners);
+      } else setStrikes(ns);
+    } else if (type === "振") {
+      handleWildStrike();
+    } else if (type === "F") {
+      setStrikes(s => Math.min(s + 1, 2));
+    } else if (type === "IP") {
+      saveSnapshot(); // インプレー画面に入る前に保存
+      goTo("inplay");
+    } else if (type === "DB") {
+      const nextRunners = advanceWalk(runners);
+      closeCurrentAtBat("デッドボール", nextRunners);
+      showToast("デッドボール");
+      setBatterIdx(i => i + 1); resetAtBat(); openNextAtBat(undefined, undefined, undefined, undefined, nextRunners);
+    } else if (type === "IBB") {
+      const nextRunners = advanceWalk(runners);
+      closeCurrentAtBat("故意四球", nextRunners);
+      showToast("故意四球");
+      setBatterIdx(i => i + 1); resetAtBat(); openNextAtBat(undefined, undefined, undefined, undefined, nextRunners);
+    }
+  };
+
+  const handleBaseClick = (base) => { setSelectedBase(base); goTo("baseAction"); };
+
+  const handleBaseAction = (action) => {
+    const base = selectedBase;
+    const nb = nextBase(base);
+    if (action === "盗塁成功" && nb && runners[nb]) { setAlert("前にランナーがいます"); return; }
+    saveSnapshot();
+    const baseLabel = base === "first" ? "1塁" : base === "second" ? "2塁" : "3塁";
+    if (action === "盗塁成功") {
+      addEvent(`${baseLabel}ランナー 盗塁成功`);
+      const nextRunners = { ...runners, [base]: false };
+      if (base === "first") nextRunners.second = true;
+      else if (base === "second") nextRunners.third = true;
+      else addScore(1);
+      setRunners(nextRunners);
+      setRunnerNames(n => {
+        const nn = { ...n, [base]: null };
+        if (base === "first") nn.second = n.first;
+        else if (base === "second") nn.third = n.second;
+        return nn;
+      });
+      setGameLog(log => log.map((h, hi) => hi !== currentHalfIdx ? h : {
+        ...h,
+        atBats: h.atBats.map((ab, ai) => ai !== currentAtBatIdx ? ab : { ...ab, runnersAfter: nextRunners })
+      }));
+      showToast("盗塁成功");
+    } else if (action === "盗塁死" || action === "牽制アウト") {
+      addEvent(`${baseLabel}ランナー ${action}`);
+      const nextRunners = { ...runners, [base]: false };
+      setRunners(nextRunners);
+      setRunnerNames(n => ({ ...n, [base]: null }));
+      showToast(action);
+      doOut(nextRunners);
+    } else if (action === "牽制セーフ") {
+      addEvent(`${baseLabel}ランナー 牽制セーフ`); showToast("牽制セーフ");
+    }
+    goBack();
+  };
+
+  const canGoBack = history.length > 0;
+  const currentRunner = runnerQueue[currentRunnerIdx];
+  const advanceOptions = (baseNum) => {
+    const opts = [];
+    for (let b = baseNum; b <= 3; b++) opts.push({ label: BASE_NAMES[b], value: b });
+    opts.push({ label:"ホーム（得点）", value:4 });
+    opts.push({ label:"アウト（走塁死）", value:"out" });
+    return opts;
+  };
+
+  // 現在の打席の投球履歴（gameLogから取得）
+  const currentPitches = currentAtBat?.pitches ?? [];
+
+  return (
+    <div style={{ display:"flex", justifyContent:"center", padding:"0 0 16px", background: C.bg, minHeight:"100vh" }}>
+      <div style={{ background: C.bg, borderRadius:0, padding:0, width:"100%", position:"relative" }}>
+
+        {/* アラート */}
+        {alert && (
+          <div style={{ position:"absolute", inset:0, zIndex:100, display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(0,0,0,0.4)", borderRadius:24 }}>
+            <div style={{ background:C.card, borderRadius:12, padding:"20px 24px", width:220, textAlign:"center" }}>
+              <div style={{ fontSize:14, fontWeight:600, color:C.textPri, marginBottom:16 }}>{alert}</div>
+              <Btn label="OK" bg={C.brandLight} border={C.brand} color={C.brand} onClick={() => setAlert(null)}/>
+            </div>
+          </div>
+        )}
+
+        {/* 試合終了モーダル */}
+        {showEndModal && (
+          <div
+            style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:200, display:"flex", alignItems:"flex-end", justifyContent:"center" }}
+            onClick={() => { setShowEndModal(false); setEndStep("menu"); setColdReason(""); }}
+          >
+            <div
+              style={{ background:C.card, borderRadius:"18px 18px 0 0", width:"100%", maxWidth:480, padding:"24px 20px 40px", boxShadow:"0 -4px 24px rgba(0,0,0,0.2)" }}
+              onClick={e => e.stopPropagation()}
+            >
+              {/* ハンドルバー */}
+              <div style={{ width:36, height:4, background:C.divider, borderRadius:2, margin:"0 auto 20px" }}/>
+
+              {/* ── ① メニュー ── */}
+              {endStep === "menu" && (<>
+                <div style={{ textAlign:"center", fontSize:16, fontWeight:700, color:C.textPri, marginBottom:20 }}>記録を終了する</div>
+
+                <div onClick={() => { setEndType("completed"); setEndStep("confirm"); }}
+                  style={{ background:C.brandLight, borderRadius:14, padding:"16px 18px", marginBottom:12, cursor:"pointer", display:"flex", alignItems:"center", gap:14 }}
+                >
+                  <span style={{ fontSize:26 }}>✅</span>
+                  <div>
+                    <div style={{ fontSize:14, fontWeight:700, color:C.brand }}>試合終了</div>
+                    <div style={{ fontSize:12, color:C.textSec, marginTop:3 }}>最終スコアで保存して締めます</div>
+                  </div>
+                </div>
+
+                <div onClick={() => { setEndType("cold"); setColdReason(""); setEndStep("cold_reason"); }}
+                  style={{ background:"rgba(220,150,0,0.12)", borderRadius:14, padding:"16px 18px", marginBottom:12, cursor:"pointer", display:"flex", alignItems:"center", gap:14 }}
+                >
+                  <span style={{ fontSize:26 }}>⚡</span>
+                  <div>
+                    <div style={{ fontSize:14, fontWeight:700, color:"#B07800" }}>コールド / 早期終了</div>
+                    <div style={{ fontSize:12, color:C.textSec, marginTop:3 }}>規定・天候などによる途中終了</div>
+                  </div>
+                </div>
+
+                <div onClick={() => { setEndType("in_progress"); setEndStep("confirm"); }}
+                  style={{ background:"rgba(80,110,210,0.10)", borderRadius:14, padding:"16px 18px", marginBottom:24, cursor:"pointer", display:"flex", alignItems:"center", gap:14 }}
+                >
+                  <span style={{ fontSize:26 }}>🔖</span>
+                  <div>
+                    <div style={{ fontSize:14, fontWeight:700, color:"#4060C0" }}>中断して保存</div>
+                    <div style={{ fontSize:12, color:C.textSec, marginTop:3 }}>あとで続きを入力できます</div>
+                  </div>
+                </div>
+
+                <div onClick={() => { setShowEndModal(false); setEndStep("menu"); }}
+                  style={{ textAlign:"center", color:C.textSec, fontSize:14, cursor:"pointer", padding:"8px 0" }}
+                >キャンセル</div>
+              </>)}
+
+              {/* ── ② コールド理由選択 ── */}
+              {endStep === "cold_reason" && (<>
+                <div style={{ textAlign:"center", fontSize:16, fontWeight:700, color:C.textPri, marginBottom:6 }}>終了理由を選択</div>
+                <div style={{ textAlign:"center", fontSize:13, color:C.textSec, marginBottom:20 }}>{inning}回{isTop?"表":"裏"}時点で終了</div>
+
+                {["コールド", "時間切れ", "天候不良", "その他"].map(r => (
+                  <div key={r} onClick={() => setColdReason(r)}
+                    style={{
+                      borderRadius:12, padding:"14px 16px", marginBottom:10, cursor:"pointer",
+                      background: coldReason === r ? C.brandLight : C.bg,
+                      border: `2px solid ${coldReason === r ? C.brand : C.divider}`,
+                      display:"flex", alignItems:"center", justifyContent:"space-between",
+                    }}
+                  >
+                    <span style={{ fontSize:14, fontWeight: coldReason===r ? 700 : 400, color: coldReason===r ? C.brand : C.textPri }}>{r}</span>
+                    {coldReason === r && <span style={{ color:C.brand, fontWeight:700 }}>✓</span>}
+                  </div>
+                ))}
+
+                <div style={{ display:"flex", gap:12, marginTop:16 }}>
+                  <div onClick={() => { setEndStep("menu"); setColdReason(""); }}
+                    style={{ flex:1, borderRadius:12, padding:"13px", background:C.bg, border:`1px solid ${C.divider}`, textAlign:"center", cursor:"pointer", fontSize:14, color:C.textSec }}
+                  >戻る</div>
+                  <div onClick={() => coldReason && setEndStep("confirm")}
+                    style={{ flex:2, borderRadius:12, padding:"13px", background: coldReason ? C.brand : C.divider, textAlign:"center", cursor: coldReason ? "pointer" : "default", fontSize:14, fontWeight:700, color: coldReason ? C.brandText : C.textTer }}
+                  >次へ</div>
+                </div>
+              </>)}
+
+              {/* ── ③ 確認 ── */}
+              {endStep === "confirm" && (<>
+                <div style={{ textAlign:"center", fontSize:16, fontWeight:700, color:C.textPri, marginBottom:20 }}>
+                  {endType === "completed" ? "試合終了" : endType === "cold" ? `コールド (${coldReason})` : "中断して保存"}
+                </div>
+
+                <div style={{ background:C.bg, borderRadius:14, padding:"20px 16px", marginBottom:16, textAlign:"center" }}>
+                  <div style={{ fontSize:11, color:C.textSec, marginBottom:8, letterSpacing:"0.08em" }}>{activeTeamA} vs {oppTeamName}</div>
+                  <div style={{ fontSize:36, fontWeight:900, color:C.brand, letterSpacing:"0.05em" }}>{scoreA} - {scoreB}</div>
+                  <div style={{ fontSize:12, color:C.textSec, marginTop:6 }}>{inning}回{isTop?"表":"裏"}時点</div>
+                </div>
+
+                {endType === "in_progress" && (
+                  <div style={{ background:"rgba(80,110,210,0.10)", borderRadius:10, padding:"10px 14px", marginBottom:16, fontSize:12, color:"#4060C0", textAlign:"center" }}>
+                    ホーム画面から続きを入力できます
+                  </div>
+                )}
+
+                <div style={{ display:"flex", gap:12 }}>
+                  <div onClick={() => setEndStep(endType === "cold" ? "cold_reason" : "menu")}
+                    style={{ flex:1, borderRadius:12, padding:"13px", background:C.bg, border:`1px solid ${C.divider}`, textAlign:"center", cursor:"pointer", fontSize:14, color:C.textSec }}
+                  >戻る</div>
+                  <div onClick={() => !saving && saveGame(endType, { reason: coldReason, endInning: inning })}
+                    style={{ flex:2, borderRadius:12, padding:"13px", background: saving ? C.divider : C.brand, textAlign:"center", cursor: saving ? "default" : "pointer", fontSize:14, fontWeight:700, color:C.brandText }}
+                  >{saving ? "保存中..." : "保存する"}</div>
+                </div>
+              </>)}
+
+              {/* ── ④ 保存成功 ── */}
+              {endStep === "success" && (<>
+                <div style={{ textAlign:"center", padding:"8px 0 20px" }}>
+                  <div style={{ fontSize:40, marginBottom:12 }}>🎉</div>
+                  <div style={{ fontSize:16, fontWeight:700, color:C.brand, marginBottom:8 }}>保存しました</div>
+                  <div style={{ fontSize:13, color:C.textSec }}>
+                    {endType === "in_progress" ? "ホーム画面から続きを入力できます" : "試合データを保存しました"}
+                  </div>
+                </div>
+                <div onClick={onBack}
+                  style={{ borderRadius:12, padding:"14px", background:C.brand, textAlign:"center", cursor:"pointer", fontSize:14, fontWeight:700, color:C.brandText }}
+                >ホームに戻る</div>
+              </>)}
+            </div>
+          </div>
+        )}
+
+        <div style={{ background: C.bg, borderRadius:0 }}>
+
+          {/* スコアバー */}
+          <div style={{ background: C.scoreBg, padding:"14px 20px 16px" }}>
+            <div style={{ fontSize:9, color:C.scoreSubText, textAlign:"center", letterSpacing:"0.15em", marginBottom:10, opacity:0.9, fontWeight:500 }}>NEO SCORE BOOK</div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end" }}>
+              <div style={{ opacity:isTop?1:0.35, transition:"opacity 0.2s" }}>
+                <div style={{ color:C.scoreSubText, fontSize:11, marginBottom:2 }}>{activeTeamA}</div>
+                <div style={{ color:C.scoreText, fontSize:isTop?36:28, fontWeight:800, lineHeight:1 }}>{scoreA}</div>
+              </div>
+              <div style={{ textAlign:"center", paddingBottom:4 }}>
+                <div style={{ color:C.scoreSubText, fontSize:12 }}>{inning}回 {isTop?"▲ 表":"▼ 裏"}</div>
+              </div>
+              <div style={{ textAlign:"right", opacity:isTop?0.35:1, transition:"opacity 0.2s" }}>
+                <div style={{ color:C.scoreSubText, fontSize:11, marginBottom:2 }}>{oppTeamName}</div>
+                <div style={{ color:C.scoreText, fontSize:isTop?28:36, fontWeight:800, lineHeight:1 }}>{scoreB}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── ゲーム内サブタブ ── */}
+          <div style={{ display:"flex", background: C.card, borderBottom:`1px solid ${C.divider}` }}>
+            {[
+              { id:"record",  label:"記録",  Icon: PenLine },
+              { id:"history", label:"経過",  Icon: ScrollText },
+              { id:"stats",   label:"成績",  Icon: BarChart2 },
+            ].map(t => (
+              <div key={t.id} onClick={() => setActiveView(t.id)} style={{
+                flex:1, display:"flex", flexDirection:"column", alignItems:"center",
+                gap:2, padding:"8px 4px", cursor:"pointer", userSelect:"none",
+                borderBottom: activeView===t.id ? `2px solid ${C.brand}` : "2px solid transparent",
+              }}>
+                <t.Icon size={16} color={activeView===t.id ? C.brand : C.textTer} strokeWidth={activeView===t.id ? 2.5 : 1.8}/>
+                <span style={{ fontSize:10, fontWeight: activeView===t.id ? 700 : 400, color: activeView===t.id ? C.brand : C.textTer }}>{t.label}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* 経過ビュー */}
+          {activeView === "history" && <HistoryView gameLog={gameLog} />}
+
+          {/* 成績ビュー */}
+          {activeView === "stats" && (
+            <StatsView gameLog={gameLog} battersA={activeBattersA} battersB={activeBattersB} teamNameA={activeTeamA} teamNameB={oppTeamName}/>
+          )}
+
+          {activeView === "settings" && (
+            <div style={{ padding:"24px 14px" }}>
+              <div style={{ fontSize:13, fontWeight:700, color:C.textPri, marginBottom:16 }}>設定</div>
+              <div style={{ padding:"12px 14px", background:C.bg, borderRadius:10, border:`1px solid ${C.divider}` }}>
+                <div style={{ fontSize:11, color:C.textTer, marginBottom:4 }}>バージョン</div>
+                <div style={{ fontSize:13, color:C.textPri }}>{APP_VERSION}</div>
+              </div>
+            </div>
+          )}
+
+          {/* 記録ビュー */}
+          {activeView === "record" && <>
+
+            {/* 戻るバー */}
+            <div style={{ padding:"6px 14px", borderBottom:`1px solid ${C.divider}`, display:"flex", alignItems:"center", minHeight:38 }}>
+              {canGoBack && (
+                <div
+                  onClick={goBack}
+                  style={{ display:"flex", alignItems:"center", gap:2, padding:"4px 12px 4px 6px", borderRadius:20, background:C.card, border:`1px solid ${C.divider}`, cursor:"pointer", userSelect:"none", boxShadow:"0 1px 4px rgba(0,0,0,0.06)" }}
+                >
+                  <i className="ti ti-chevron-left" style={{ fontSize:16, color:C.textSec }} aria-hidden="true"/>
+                  <span style={{ fontSize:13, color:C.textSec, fontWeight:500 }}>戻る</span>
+                </div>
+              )}
+            </div>
+
+            {/* メイン画面 */}
+            {screen === "main" && <>
+
+              {/* 状況エリア */}
+              <div style={{ padding:"12px 20px", display:"flex", alignItems:"center", gap:12, background: C.card, boxShadow: C.cardShadow, margin:"12px 16px 0", borderRadius:20 }}>
+                <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
+                  {[
+                    { label:"B", count:balls,   max:3, color: C.bsoB },
+                    { label:"S", count:strikes, max:2, color: C.bsoS },
+                    { label:"O", count:outs,    max:2, color: C.bsoO },
+                  ].map(r => (
+                    <div key={r.label} style={{ display:"flex", alignItems:"center", gap:5 }}>
+                      <span style={{ width:12, fontSize:11, fontWeight:700, color: C.textSec }}>{r.label}</span>
+                      <div style={{ display:"flex", gap:4 }}>
+                        {Array.from({length:r.max}).map((_,i) => <Dot key={i} filled={i<r.count} color={r.color}/>)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ flex:1, display:"flex", justifyContent:"center" }}>
+                  <Diamond runners={runners} onBaseClick={handleBaseClick}/>
+                </div>
+                <div style={{ textAlign:"right" }}>
+                  <div style={{ fontSize:10, color: C.textTer, marginBottom:2 }}>ピッチャー</div>
+                  <div style={{ fontSize:13, fontWeight:700, color: C.textPri }}>#{pitcher.number} {pitcher.name}</div>
+                  <div style={{ marginTop:4, display:"inline-block", padding:"2px 10px", background: C.brandLight, borderRadius:20, fontSize:11, fontWeight:600, color: C.brand }}>{pitchCount}球</div>
+                </div>
+              </div>
+
+              {/* 打者エリア */}
+              <div style={{ padding:"12px 20px 0", margin:"12px 16px 0", background: C.card, borderRadius:20, boxShadow: C.cardShadow }}>
+                <div style={{ display:"flex", alignItems:"baseline", gap:8, marginBottom:4 }}>
+                  <span style={{ fontSize:11, fontWeight:700, color: C.brand, background: C.brandLight, padding:"2px 10px", borderRadius:20 }}>{batter.order}番</span>
+                  <span style={{ fontSize:10, color: C.textTer }}>{batter.pos}　#{batter.number}</span>
+                </div>
+                <div style={{ fontSize:22, fontWeight:800, color: C.textPri, lineHeight:1, marginBottom:10 }}>{batter.name}</div>
+
+                {/* 投球履歴 */}
+                <div style={{ position:"relative", paddingBottom:10, display:"flex", gap:5, flexWrap:"wrap", minHeight:30, alignItems:"center", borderTop:`1px solid ${C.divider}`, paddingTop:8 }}>
+                  {currentPitches.length === 0
+                    ? <span style={{ fontSize:11, color: C.textTer }}>投球なし</span>
+                    : currentPitches.map((p,i) => <PitchChip key={i} type={p}/>)
+                  }
+                  {toast && (
+                    <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", background: C.brand, color: C.brandText, fontSize:13, fontWeight:600, pointerEvents:"none", borderRadius:12 }}>{toast}</div>
+                  )}
+                </div>
+              </div>
+
+              {/* 投球ボタン */}
+              <div style={{ padding:"16px 20px 16px", margin:"12px 16px 0", background: C.card, borderRadius:20, boxShadow: C.cardShadow }}>
+                <div style={{ fontSize:9, fontWeight:700, color: C.textTer, letterSpacing:"0.1em", marginBottom:16 }}>投　球</div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:12 }}>
+                  {[
+                    { l:"-",  s:"ボール",   type:"B" },
+                    { l:"○", s:"見逃しS",  type:"見逃" },
+                    { l:"●", s:"空振りS",  type:"空振" },
+                    { l:"v",  s:"ファウル", type:"F" },
+                  ].map(b => (
+                    <div key={b.l} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:8 }}>
+                      <div
+                        onClick={() => handlePitch(b.type)}
+                        style={{ width:"100%", aspectRatio:"1", borderRadius:"50%", background:"#F5F7F5", border:"none", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, fontWeight:800, color: C.textPri, cursor:"pointer", userSelect:"none", boxShadow:"0 2px 8px rgba(0,0,0,0.08)", transition:"transform 0.08s, background 0.1s" }}
+                        onPointerDown={e => { e.currentTarget.style.transform="scale(0.93)"; e.currentTarget.style.background=C.brandLight; }}
+                        onPointerUp={e => { e.currentTarget.style.transform=""; e.currentTarget.style.background="#F5F7F5"; }}
+                        onPointerLeave={e => { e.currentTarget.style.transform=""; e.currentTarget.style.background="#F5F7F5"; }}
+                      >{b.l}</div>
+                      <div style={{ fontSize:10, color: C.textSec, fontWeight:600, whiteSpace:"nowrap" }}>{b.s}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 打席結果 */}
+              <div style={{ padding:"12px 16px 8px" }}>
+                <div style={{ fontSize:9, fontWeight:700, color: C.textTer, letterSpacing:"0.1em", marginBottom:10 }}>打席結果</div>
+                <div
+                  onClick={() => handlePitch("IP")}
+                  style={{ padding:"16px 24px", borderRadius:50, background: C.brand, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", userSelect:"none", boxShadow:"0 4px 16px rgba(61,107,61,0.35)", transition:"transform 0.08s, box-shadow 0.08s" }}
+                  onPointerDown={e => { e.currentTarget.style.transform="scale(0.97)"; e.currentTarget.style.boxShadow="none"; }}
+                  onPointerUp={e => { e.currentTarget.style.transform=""; e.currentTarget.style.boxShadow="0 4px 16px rgba(61,107,61,0.35)"; }}
+                  onPointerLeave={e => { e.currentTarget.style.transform=""; e.currentTarget.style.boxShadow="0 4px 16px rgba(61,107,61,0.35)"; }}
+                >
+                  <span style={{ fontSize:15, fontWeight:800, color: C.brandText }}>打席結果を入力</span>
+                </div>
+              </div>
+
+              {/* サブ操作 */}
+              <div style={{ padding:"8px 16px 16px", display:"flex", justifyContent:"center", alignItems:"center", gap:20 }}>
+                <span style={{ fontSize:11, color: C.textTer, cursor:"pointer" }}>選手交代</span>
+                <span
+                  onClick={stateHistory.length > 0 ? handleUndo : undefined}
+                  style={{
+                    fontSize:11, cursor: stateHistory.length > 0 ? "pointer" : "default",
+                    color: stateHistory.length > 0 ? C.textSec : C.textTer,
+                    borderBottom: stateHistory.length > 0 ? `1px dashed ${C.textTer}` : "none",
+                  }}
+                >1球取消</span>
+                <span style={{ fontSize:11, color: C.textTer, cursor:"pointer" }}>特殊処理</span>
+                <span style={{ width:1, height:10, background:C.divider }}/>
+                <span
+                  onClick={() => { setEndStep("menu"); setShowEndModal(true); }}
+                  style={{ fontSize:11, color:"#C04040", cursor:"pointer", fontWeight:600, borderBottom:"1px solid rgba(192,64,64,0.35)" }}
+                >記録を終了</span>
+              </div>
+
+              {/* スコアボード */}
+              <div style={{ borderTop: `1px solid ${C.divider}`, padding: "0 14px" }}>
+                <div style={{ display: "flex", borderBottom: `1px solid ${C.divider}` }}>
+                  <div style={{ width: 64, fontSize: 10, color: C.textTer, padding: "5px 0", flexShrink: 0 }}>チーム</div>
+                  {Array.from({ length: 9 }).map((_, i) => (
+                    <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 10, color: i + 1 === inning ? C.brand : C.textTer, fontWeight: i + 1 === inning ? 700 : 400, padding: "5px 0" }}>{i + 1}</div>
+                  ))}
+                  <div style={{ width: 32, textAlign: "center", fontSize: 10, fontWeight: 700, color: C.textPri, padding: "5px 0", flexShrink: 0 }}>計</div>
+                </div>
+                {[
+                  { name: activeTeamA, isTop: true,  score: scoreA },
+                  { name: oppTeamName, isTop: false, score: scoreB },
+                ].map(team => {
+                  const inningScores = {};
+                  gameLog.forEach(half => {
+                    if ((half.topBottom === "表") !== team.isTop) return;
+                    const runs = half.atBats.reduce((s, ab) => s + (ab.runsScored || 0), 0);
+                    inningScores[half.inning] = (inningScores[half.inning] || 0) + runs;
+                  });
+                  return (
+                    <div key={team.name} style={{ display: "flex", borderBottom: `1px solid ${C.divider}` }}>
+                      <div style={{ width: 64, fontSize: 11, fontWeight: 600, color: C.textPri, padding: "6px 0", flexShrink: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{team.name}</div>
+                      {Array.from({ length: 9 }).map((_, i) => {
+                        const started = i + 1 < inning || (i + 1 === inning && (!isTop || team.isTop));
+                        const isCurrent = i + 1 === inning && started;
+                        const val = inningScores[i+1];
+                        return (
+                          <div key={i} style={{
+                            flex: 1, textAlign: "center", fontSize: 12, padding: "6px 0",
+                            color: val > 0 ? C.brand : isCurrent ? C.textPri : C.textTer,
+                            fontWeight: val > 0 ? 700 : 400,
+                          }}>
+                            {val !== undefined ? val : (started ? 0 : "-")}
+                          </div>
+                        );
+                      })}
+                      <div style={{ width: 32, textAlign: "center", fontSize: 13, fontWeight: 800, color: C.textPri, padding: "6px 0", flexShrink: 0 }}>{team.score}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>}
+
+            {/* インプレー結果 */}
+            {screen === "inplay" && <InplayScreen batter={batter} onResult={handleInplayResult} onBack={goBack}/>}
+
+            {/* 凡退時：進塁した？ */}
+            {screen === "askAdvance" && <>
+              <div style={{ padding:"16px 14px", borderBottom:`1px solid ${C.divider}` }}>
+                <div style={{ fontSize:13, fontWeight:600, color:C.textPri, marginBottom:4 }}>{pendingResult?.label}</div>
+                <div style={{ fontSize:14, color:C.textSec }}>ランナーは進塁しましたか？</div>
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, padding:"14px" }}>
+                <Btn label="はい"   bg={C.brandLight} border={C.brand} color={C.brand} onClick={() => handleAskAdvance(true)}/>
+                <Btn label="いいえ" bg="#F1EFE8" border="#9B9A94" color="#3A3A38" onClick={() => handleAskAdvance(false)}/>
+              </div>
+            </>}
+
+            {/* ランナー進塁確認 */}
+            {screen === "runnerAdvance" && currentRunner && <>
+              <div style={{ padding:"12px 14px", borderBottom:`1px solid ${C.divider}` }}>
+                <div style={{ fontSize:11, color:C.textTer, marginBottom:4 }}>
+                  {pendingResult?.dp ? "併殺打" : `${currentRunnerIdx+1} / ${runnerQueue.length}人目`}
+                </div>
+                <div style={{ fontSize:14, fontWeight:600, color:C.textPri }}>
+                  {currentRunner.label}ランナー{currentRunner.name ? `（${currentRunner.name}）` : ""}
+                </div>
+                <div style={{ fontSize:13, color:C.textSec, marginTop:4 }}>
+                  {pendingResult?.dp ? "アウトになった場合は「アウト」を選択" : "どこまで進みましたか？"}
+                </div>
+              </div>
+              <div style={{ display:"flex", flexDirection:"column", gap:7, padding:"12px 14px" }}>
+                {advanceOptions(currentRunner.baseNum).map(opt => (
+                  <Btn key={opt.value} label={opt.label}
+                    bg={opt.value==="out"?"#F5EAEA":opt.value===4?C.brandLight:C.bg}
+                    border={opt.value==="out"?"#8B2020":opt.value===4?C.brand:C.divider}
+                    color={opt.value==="out"?"#8B2020":opt.value===4?C.brand:C.textPri}
+                    onClick={() => handleRunnerAdvance(opt.value)}
+                  />
+                ))}
+              </div>
+            </>}
+
+            {/* バンク図タップ：走塁アクション */}
+            {screen === "baseAction" && <>
+              <div style={{ padding:"12px 14px", borderBottom:`1px solid ${C.divider}` }}>
+                <div style={{ fontSize:11, color:C.textTer, marginBottom:4 }}>
+                  {selectedBase==="first"?"1塁":selectedBase==="second"?"2塁":"3塁"}ランナー
+                </div>
+                <div style={{ fontSize:14, fontWeight:600, color:C.textPri }}>アクションを選択</div>
+              </div>
+              <div style={{ display:"flex", flexDirection:"column", gap:7, padding:"12px 14px" }}>
+                <Btn label="盗塁成功"   bg={C.brandLight} border={C.brand} color={C.brand}
+                  disabled={!!(nextBase(selectedBase) && runners[nextBase(selectedBase)])}
+                  onClick={() => handleBaseAction("盗塁成功")}/>
+                <Btn label="盗塁死"    bg="#F5EAEA" border="#8B2020" color="#8B2020" onClick={() => handleBaseAction("盗塁死")}/>
+                <Btn label="牽制セーフ" bg="#F1EFE8" border="#9B9A94" color="#3A3A38" onClick={() => handleBaseAction("牽制セーフ")}/>
+                <Btn label="牽制アウト" bg="#F5EAEA" border="#8B2020" color="#8B2020" onClick={() => handleBaseAction("牽制アウト")}/>
+              </div>
+            </>}
+
+          </>}
+
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────
+// ホーム画面（試合タブ）
+// ─────────────────────────────
+const RECENT_GAMES = [
+  { id: 1, date: "6月8日",  opponent: "巨人", scoreA: 5, scoreB: 3, result: "勝" },
+  { id: 2, date: "6月5日",  opponent: "中日", scoreA: 2, scoreB: 4, result: "負" },
+  { id: 3, date: "6月1日",  opponent: "広島", scoreA: 7, scoreB: 2, result: "勝" },
+];
+const TEAM_STATS = { games: 12, wins: 8, losses: 4, winRate: ".667" };
+
+function GamesTab({ team, onStartRecord, onStartOrder }) {
+  return (
+    <div style={{ flex: 1 }}>
+      <div style={{ background: C.scoreBg, padding: "20px 20px 24px" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+          <div style={{ fontSize: 9, color: C.scoreSubText, letterSpacing: "0.15em", opacity: 0.8 }}>NEO SCORE BOOK</div>
+          <div style={{ fontSize: 9, color: C.scoreSubText, opacity: 0.6 }}>{APP_VERSION}</div>
+        </div>
+        <div style={{ fontSize: 22, fontWeight: 800, color: C.scoreText, marginBottom: 2 }}>{team ? team.name : "チーム名"}</div>
+        <div style={{ fontSize: 12, color: C.scoreSubText }}>{TEAM_STATS.games}試合　{TEAM_STATS.wins}勝 {TEAM_STATS.losses}敗　勝率 {TEAM_STATS.winRate}</div>
+      </div>
+
+      <div style={{ padding: "16px 16px 32px", display: "flex", flexDirection: "column", gap: 16 }}>
+
+        {/* 試合を記録する */}
+        <div onClick={onStartOrder} style={{ background: C.brand, borderRadius: 20, padding: "20px", boxShadow: "0 4px 20px rgba(61,107,61,0.35)", display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}
+          onPointerDown={e => e.currentTarget.style.opacity = "0.85"}
+          onPointerUp={e => e.currentTarget.style.opacity = "1"}
+          onPointerLeave={e => e.currentTarget.style.opacity = "1"}
+        >
+          <div style={{ width: 44, height: 44, borderRadius: "50%", background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <PenLine size={22} color={C.brandText}/>
+          </div>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: C.brandText }}>試合を記録する</div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", marginTop: 2 }}>オーダー登録 → 記録開始</div>
+          </div>
+          <ChevronRight size={20} color="rgba(255,255,255,0.6)" style={{ marginLeft: "auto" }}/>
+        </div>
+
+        {/* 直近の試合 */}
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.textSec, display: "flex", alignItems: "center", gap: 6 }}>
+              <Calendar size={13} color={C.textSec}/>直近の試合
+            </div>
+          </div>
+          <div style={{ background: C.card, borderRadius: 16, overflow: "hidden", boxShadow: C.cardShadow }}>
+            {RECENT_GAMES.map((g, i) => (
+              <div key={g.id} style={{ display: "flex", alignItems: "center", padding: "14px 16px", borderBottom: i < RECENT_GAMES.length - 1 ? `1px solid ${C.divider}` : "none" }}>
+                <div style={{ width: 40, fontSize: 11, color: C.textTer, flexShrink: 0 }}>{g.date}</div>
+                <div style={{ flex: 1, fontSize: 14, fontWeight: 600, color: C.textPri }}>vs {g.opponent}</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: C.textPri, marginRight: 8 }}>{g.scoreA} - {g.scoreB}</div>
+                <div style={{ width: 28, height: 28, borderRadius: "50%", background: g.result === "勝" ? C.brandLight : "#FEF0F0", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: g.result === "勝" ? C.brand : "#8B2020" }}>{g.result}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* チーム成績 */}
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.textSec, display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+            <TrendingUp size={13} color={C.textSec}/>チーム成績
+          </div>
+          <div style={{ background: C.card, borderRadius: 16, padding: "16px", boxShadow: C.cardShadow, display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
+            {[{ label: "試合", value: TEAM_STATS.games }, { label: "勝利", value: TEAM_STATS.wins }, { label: "敗北", value: TEAM_STATS.losses }, { label: "勝率", value: TEAM_STATS.winRate }].map(s => (
+              <div key={s.label} style={{ textAlign: "center" }}>
+                <div style={{ fontSize: 20, fontWeight: 800, color: C.textPri }}>{s.value}</div>
+                <div style={{ fontSize: 10, color: C.textTer, marginTop: 2 }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────
+// 成績・設定プレースホルダー
+// ─────────────────────────────
+function PlaceholderTab({ label }) {
+  return (
+    <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8 }}>
+      <div style={{ fontSize: 32 }}>🚧</div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: C.textSec }}>{label}</div>
+      <div style={{ fontSize: 12, color: C.textTer }}>準備中です</div>
+    </div>
+  );
+}
+
+// ─────────────────────────────
+// メインアプリ
+// ─────────────────────────────
+// ─────────────────────────────
+// チーム初回セットアップ画面
+// ─────────────────────────────
+function TeamSetupScreen({ onComplete }) {
+  const [teamName, setTeamName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSave = async () => {
+    if (!teamName.trim()) { setError("チーム名を入力してください"); return; }
+    setSaving(true);
+    const { data, error } = await supabase
+      .from("nsb_teams")
+      .insert({ name: teamName.trim(), password_hash: "none" })
+      .select()
+      .single();
+    if (error) { setError("保存に失敗しました"); setSaving(false); return; }
+    onComplete(data);
+  };
+
+  return (
+    <div style={{ background: C.bg, minHeight:"100vh", width:"100%", display:"flex", flexDirection:"column", justifyContent:"center", padding:"32px 20px", fontFamily:"'Noto Sans JP', sans-serif" }}>
+      <div style={{ fontSize:9, color: C.textTer, letterSpacing:"0.15em", marginBottom:8 }}>NEO SCORE BOOK</div>
+      <div style={{ fontSize:24, fontWeight:800, color: C.textPri, marginBottom:4 }}>チームを登録する</div>
+      <div style={{ fontSize:13, color: C.textSec, marginBottom:32 }}>最初にチーム名を設定してください</div>
+
+      <div style={{ background: C.card, borderRadius:16, padding:"16px", boxShadow: C.cardShadow, marginBottom:16 }}>
+        <div style={{ fontSize:10, fontWeight:700, color: C.textTer, letterSpacing:"0.08em", marginBottom:8 }}>チーム名</div>
+        <input
+          type="text"
+          placeholder="例：兵庫ライオンズ"
+          value={teamName}
+          onChange={e => { setTeamName(e.target.value); setError(""); }}
+          style={{ width:"100%", border:"none", outline:"none", fontSize:18, fontWeight:700, color: C.textPri, background:"transparent", fontFamily:"inherit" }}
+        />
+        {error && <div style={{ fontSize:11, color:"#8B2020", marginTop:6 }}>{error}</div>}
+      </div>
+
+      <div
+        onClick={handleSave}
+        style={{ padding:"16px", borderRadius:50, background: saving ? C.textSec : C.brand, textAlign:"center", fontSize:15, fontWeight:800, color: C.brandText, cursor: saving ? "default" : "pointer", boxShadow:"0 4px 16px rgba(61,107,61,0.35)" }}
+        onPointerDown={e => !saving && (e.currentTarget.style.opacity="0.8")}
+        onPointerUp={e => e.currentTarget.style.opacity="1"}
+        onPointerLeave={e => e.currentTarget.style.opacity="1"}
+      >
+        {saving ? "保存中..." : "登録して始める"}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────
+// 設定画面
+// ─────────────────────────────
+function SettingsScreen({ team, onUpdate }) {
+  const [teamName, setTeamName] = useState(team.name);
+  const [saved, setSaved] = useState(false);
+
+  const handleSave = async () => {
+    await supabase.from("nsb_teams").update({ name: teamName }).eq("id", team.id);
+    onUpdate({ ...team, name: teamName });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  return (
+    <div style={{ background: C.bg, minHeight:"100vh", width:"100%", fontFamily:"'Noto Sans JP', sans-serif" }}>
+      <div style={{ background: C.card, padding:"16px 20px", boxShadow:"0 1px 0 #F0F0F0", marginBottom:16, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <div style={{ fontSize:18, fontWeight:800, color: C.textPri }}>設定</div>
+        <span style={{ fontSize:9, color:C.textTer }}>{APP_VERSION}</span>
+      </div>
+
+      <div style={{ padding:"0 16px", display:"flex", flexDirection:"column", gap:12 }}>
+        {/* チーム名 */}
+        <div style={{ background: C.card, borderRadius:16, padding:"14px 16px", boxShadow: C.cardShadow }}>
+          <div style={{ fontSize:10, fontWeight:700, color: C.textTer, letterSpacing:"0.08em", marginBottom:8 }}>チーム名</div>
+          <input
+            type="text"
+            value={teamName}
+            onChange={e => setTeamName(e.target.value)}
+            style={{ width:"100%", border:"none", outline:"none", fontSize:16, fontWeight:700, color: C.textPri, background:"transparent", fontFamily:"inherit" }}
+          />
+        </div>
+
+        <div
+          onClick={handleSave}
+          style={{ padding:"14px", borderRadius:50, background: saved ? C.textSec : C.brand, textAlign:"center", fontSize:14, fontWeight:800, color: C.brandText, cursor:"pointer", boxShadow:"0 4px 16px rgba(61,107,61,0.35)", transition:"background 0.2s" }}
+          onPointerDown={e => e.currentTarget.style.opacity="0.8"}
+          onPointerUp={e => e.currentTarget.style.opacity="1"}
+          onPointerLeave={e => e.currentTarget.style.opacity="1"}
+        >
+          {saved ? "保存しました ✓" : "保存する"}
+        </div>
+
+        <div style={{ padding:"12px 0", textAlign:"center", fontSize:11, color: C.textTer }}>
+          neo score book v0.1.0
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NeoScoreBookApp() {
+  const [activeTab, setActiveTab] = useState("games");
+  const [screen, setScreen] = useState("home");
+  const [team, setTeam] = useState(null);
+  const [appLoading, setAppLoading] = useState(true);
+  const [gameOrder, setGameOrder] = useState(null);
+  const [leaveGameConfirm, setLeaveGameConfirm] = useState(null); // null | tabId
+
+  // 起動時にチーム情報を取得
+  useEffect(() => {
+    loadTeam();
+  }, []);
+
+  const loadTeam = async () => {
+    try {
+      const { data } = await supabase.from("nsb_teams").select("*").limit(1);
+      if (data && data.length > 0) setTeam(data[0]);
+    } catch(e) {
+      console.error(e);
+    } finally {
+      setAppLoading(false);
+    }
+  };
+
+  // 初回セットアップ画面
+  if (appLoading) return (
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background: C.bg }}>
+      <div style={{ fontSize:14, color: C.textTer }}>読み込み中...</div>
+    </div>
+  );
+
+  if (!team) return <TeamSetupScreen onComplete={(t) => setTeam(t)}/>;
+
+  const tabs = [
+    { id: "games",   label: "試合",  Icon: Calendar },
+    { id: "players", label: "選手",  Icon: Users },
+    { id: "stats",   label: "成績",  Icon: BarChart2 },
+    { id: "settings",label: "設定",  Icon: Settings },
+  ];
+
+  const renderContent = () => {
+    // 試合タブの画面遷移
+    if (activeTab === "games") {
+      if (screen === "order") return <OrderRegistration onBack={() => setScreen("home")} onNext={(order) => { setGameOrder(order); setScreen("record"); }} teamId={team.id}/>;
+      if (screen === "record") return <GameRecordScreen onBack={() => setScreen("home")} gameOrder={gameOrder} teamName={team.name}/>;
+      return <GamesTab team={team} onStartOrder={() => setScreen("order")} onStartRecord={() => setScreen("record")}/>;
+    }
+    if (activeTab === "players") return <PlayerManagement teamId={team.id} teamName={team.name}/>;
+    if (activeTab === "stats")   return <PlaceholderTab label="成績"/>;
+    if (activeTab === "settings") return <SettingsScreen team={team} onUpdate={(t) => setTeam(t)}/>;
+  };
+
+  const handleTabChange = (id) => {
+    if (activeTab === "games" && screen === "record") {
+      setLeaveGameConfirm(id);
+      return;
+    }
+    setActiveTab(id);
+    if (id === "games") setScreen("home");
+  };
+
+  const confirmLeaveGame = () => {
+    setActiveTab(leaveGameConfirm);
+    setScreen("home");
+    setLeaveGameConfirm(null);
+  };
+
+  return (
+    <div style={{ background: C.bg, minHeight: "100vh", width: "100%", fontFamily: "'Noto Sans JP', sans-serif", display: "flex", flexDirection: "column" }}>
+
+      {/* メインコンテンツ */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", paddingBottom: 64 }}>
+        {renderContent()}
+      </div>
+
+      {/* ボトムタブバー（常時表示） */}
+      <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, borderTop: `1px solid ${C.divider}`, display: "flex", background: C.card, boxShadow: "0 -4px 20px rgba(0,0,0,0.05)", padding: "8px 0 12px", zIndex: 100 }}>
+        {tabs.map(tab => (
+          <div key={tab.id} onClick={() => handleTabChange(tab.id)} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "pointer" }}>
+            <div style={{ padding: "4px 14px", borderRadius: 50, background: activeTab === tab.id ? C.brandLight : "transparent", transition: "background 0.15s" }}>
+              <tab.Icon size={20} color={activeTab === tab.id ? C.brand : C.textTer} strokeWidth={activeTab === tab.id ? 2.5 : 1.8}/>
+            </div>
+            <span style={{ fontSize: 10, fontWeight: activeTab === tab.id ? 700 : 400, color: activeTab === tab.id ? C.brand : C.textTer }}>{tab.label}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* 記録画面離脱確認モーダル */}
+      {leaveGameConfirm && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:300, display:"flex", alignItems:"center", justifyContent:"center", padding:"0 24px" }}>
+          <div style={{ background: C.card, borderRadius:16, padding:"24px 20px", width:"100%", maxWidth:340 }}>
+            <div style={{ fontSize:15, fontWeight:700, color: C.textPri, marginBottom:8, textAlign:"center" }}>記録画面を離れますか？</div>
+            <div style={{ fontSize:13, color: C.textSec, marginBottom:20, textAlign:"center" }}>保存していない記録データは失われます。</div>
+            <div style={{ display:"flex", gap:10 }}>
+              <div onClick={() => setLeaveGameConfirm(null)}
+                style={{ flex:1, padding:"13px", borderRadius:12, background: C.bg, border:`1px solid ${C.divider}`, textAlign:"center", cursor:"pointer", fontSize:13, color: C.textSec, fontWeight:600 }}>
+                キャンセル
+              </div>
+              <div onClick={confirmLeaveGame}
+                style={{ flex:1, padding:"13px", borderRadius:12, background:"#8B2020", textAlign:"center", cursor:"pointer", fontSize:13, fontWeight:700, color:"#FFF" }}>
+                離れる
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<NeoScoreBookApp />);
+  </script>
+</body>
+</html>

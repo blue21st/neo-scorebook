@@ -6,7 +6,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>野球成績管理 - BALLSTATS</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
   :root {
     --bg: #0a0e1a;
@@ -219,112 +218,30 @@ td { padding: 10px 6px; font-size: 12px; }
 /* 打席詳細行 */
 .detail-row { gap: 4px; }
 .detail-num { font-size: 12px; min-width: 16px; }
-
-/* 認証フォーム */
-.auth-input {
-  width: 100%;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px 16px;
-  color: var(--text);
-  font-size: 15px;
-  font-family: inherit;
-  outline: none;
-  margin-bottom: 10px;
-}
 }
 </style>
 
 </head>
 <body>
 
-<!-- 認証画面 -->
+<!-- ロック画面 -->
 
-<div id="auth-screen" style="position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center;">
-  <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:40px 32px;width:90%;max-width:380px;text-align:center;">
+<div id="lock-screen" style="position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:40px 32px;width:90%;max-width:360px;text-align:center;">
     <div style="font-family:'Bebas Neue',sans-serif;font-size:36px;color:var(--accent);letter-spacing:3px;margin-bottom:8px;">⚾ BALLSTATS</div>
-
-    <!-- ログイン -->
-    <div id="auth-login">
-      <div style="font-size:13px;color:var(--muted);margin-bottom:24px;">チームのアカウントにログイン</div>
-      <input type="email" id="auth-email" autocomplete="email" placeholder="メールアドレス"
-        style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 16px;color:var(--text);font-size:15px;font-family:inherit;outline:none;margin-bottom:10px;"
-        onkeydown="if(event.key==='Enter')signIn()">
-      <input type="password" id="auth-password" autocomplete="current-password" placeholder="パスワード"
-        style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 16px;color:var(--text);font-size:15px;font-family:inherit;outline:none;margin-bottom:16px;"
-        onkeydown="if(event.key==='Enter')signIn()">
-      <button type="button" onclick="signIn()" class="btn btn-primary" style="width:100%;">ログイン</button>
-      <div style="margin-top:12px;font-size:13px;color:var(--muted);">
-        <span onclick="showResetForm()" style="color:var(--muted);cursor:pointer;text-decoration:underline;">パスワードを忘れた方</span>
-      </div>
-      <div style="margin-top:12px;font-size:13px;color:var(--muted);">
-        アカウントをお持ちでない方は
-        <span onclick="toggleAuthMode()" style="color:var(--accent);cursor:pointer;text-decoration:underline;">新規登録</span>
-      </div>
-    </div>
-
-    <!-- パスワードリセット（メール送信） -->
-    <div id="auth-reset" style="display:none;">
-      <div style="font-size:13px;color:var(--muted);margin-bottom:24px;">パスワードをリセット</div>
-      <input type="email" id="auth-reset-email" autocomplete="email" placeholder="登録済みのメールアドレス"
-        style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 16px;color:var(--text);font-size:15px;font-family:inherit;outline:none;margin-bottom:16px;"
-        onkeydown="if(event.key==='Enter')sendPasswordReset()">
-      <button type="button" onclick="sendPasswordReset()" class="btn btn-primary" style="width:100%;">リセットメールを送信</button>
-      <div style="margin-top:16px;font-size:13px;color:var(--muted);">
-        <span onclick="showLoginForm()" style="color:var(--accent);cursor:pointer;text-decoration:underline;">ログインに戻る</span>
-      </div>
-    </div>
-
-    <!-- 新しいパスワード設定 -->
-    <div id="auth-newpassword" style="display:none;">
-      <div style="font-size:13px;color:var(--muted);margin-bottom:24px;">新しいパスワードを設定</div>
-      <input type="password" id="auth-new-pw" autocomplete="new-password" placeholder="新しいパスワード（6文字以上）"
-        style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 16px;color:var(--text);font-size:15px;font-family:inherit;outline:none;margin-bottom:10px;"
-        onkeydown="if(event.key==='Enter')updatePassword()">
-      <input type="password" id="auth-new-pw2" autocomplete="new-password" placeholder="パスワードを再入力"
-        style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 16px;color:var(--text);font-size:15px;font-family:inherit;outline:none;margin-bottom:16px;"
-        onkeydown="if(event.key==='Enter')updatePassword()">
-      <button type="button" onclick="updatePassword()" class="btn btn-primary" style="width:100%;">パスワードを更新</button>
-    </div>
-
-    <!-- 新規登録 -->
-    <div id="auth-signup" style="display:none;">
-      <div style="font-size:13px;color:var(--muted);margin-bottom:24px;">新規アカウント作成</div>
-      <input type="text" id="auth-team" placeholder="チーム名"
-        style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 16px;color:var(--text);font-size:15px;font-family:inherit;outline:none;margin-bottom:10px;">
-      <input type="email" id="auth-email2" autocomplete="email" placeholder="メールアドレス"
-        style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 16px;color:var(--text);font-size:15px;font-family:inherit;outline:none;margin-bottom:10px;">
-      <input type="password" id="auth-password2" autocomplete="new-password" placeholder="パスワード（6文字以上）"
-        style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 16px;color:var(--text);font-size:15px;font-family:inherit;outline:none;margin-bottom:16px;">
-      <button type="button" onclick="signUp()" class="btn btn-primary" style="width:100%;">アカウントを作成</button>
-      <div style="margin-top:16px;font-size:13px;color:var(--muted);">
-        既にアカウントをお持ちの方は
-        <span onclick="toggleAuthMode()" style="color:var(--accent);cursor:pointer;text-decoration:underline;">ログイン</span>
-      </div>
-    </div>
-
-    <div id="auth-message" style="display:none;font-size:13px;margin-top:12px;"></div>
-  </div>
-</div>
-
-<!-- ログアウト確認ダイアログ -->
-<div id="logout-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10000;align-items:center;justify-content:center;">
-  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:28px 32px;text-align:center;min-width:260px;">
-    <div style="font-size:16px;font-weight:600;margin-bottom:20px;">ログアウトしますか？</div>
-    <div style="display:flex;gap:12px;justify-content:center;">
-      <button onclick="confirmSignOut()" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:10px 24px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">ログアウト</button>
-      <button onclick="document.getElementById('logout-overlay').style.display='none'" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px 24px;font-size:14px;cursor:pointer;font-family:inherit;">キャンセル</button>
-    </div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:28px;">パスワードを入力してください</div>
+    <input type="password" id="pw-input" autocomplete="off" placeholder="パスワード"
+      style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 16px;color:var(--text);font-size:16px;font-family:inherit;outline:none;text-align:center;margin-bottom:12px;"
+      onkeydown="if(event.key==='Enter')checkPassword()">
+    <button type="button" onclick="checkPassword()" class="btn btn-primary" style="width:100%;">ログイン</button>
+    <div id="pw-error" style="display:none;color:var(--red);font-size:13px;margin-top:10px;">パスワードが違います</div>
   </div>
 </div>
 
 <div id="app-content" style="display:none;">
 <header>
   <div class="logo" onclick="loadFromSupabase();switchTab('stats');" style="cursor:pointer;">⚾ BALL<span>STATS</span></div>
-  <div id="team-name-display" style="margin-left:12px;font-size:13px;color:var(--muted);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px;"></div>
-  <div id="app-version" style="margin-left:auto;font-size:11px;color:var(--muted);font-family:monospace;letter-spacing:0.5px;opacity:0.7;">v2026.06.03 11:10</div>
-  <button onclick="signOut()" style="margin-left:12px;background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap;">ログアウト</button>
+  <div id="app-version" style="margin-left:auto;font-size:11px;color:var(--muted);font-family:monospace;letter-spacing:0.5px;opacity:0.7;">v2026.05.21-d</div>
 </header>
 
 <div class="main">
@@ -333,8 +250,6 @@ td { padding: 10px 6px; font-size: 12px; }
     <button class="tab" onclick="switchTab('register')">選手一覧</button>
     <button class="tab" onclick="switchTab('games')">試合一覧</button>
     <button class="tab" onclick="switchTab('add')">試合追加</button>
-    <button class="tab" onclick="switchTab('help')">使い方</button>
-    <button class="tab" onclick="switchTab('contact')">お問い合わせ</button>
   </div>
 
   <!-- 成績一覧 -->
@@ -427,71 +342,6 @@ td { padding: 10px 6px; font-size: 12px; }
     <div id="game-list-wrap"></div>
   </div>
 
-  <!-- 使い方 -->
-
-  <div class="panel" id="panel-help">
-    <div class="form-card" style="max-width:680px;margin:0 auto;">
-      <div class="form-title">使い方</div>
-
-      <div style="display:flex;flex-direction:column;gap:28px;">
-
-        <div>
-          <div style="font-size:13px;color:var(--accent);font-weight:700;letter-spacing:1px;margin-bottom:10px;">STEP 1 ── アカウントを作る</div>
-          <p style="font-size:14px;color:var(--text);line-height:1.8;">
-            ログイン画面の「新規登録」をクリックし、メールアドレス・パスワード・チーム名を入力して登録してください。<br>
-            登録後、入力したメールアドレスに確認メールが届きます。メール内のリンクをクリックすると登録が完了します。
-          </p>
-        </div>
-
-        <div>
-          <div style="font-size:13px;color:var(--accent);font-weight:700;letter-spacing:1px;margin-bottom:10px;">STEP 2 ── 選手を登録する</div>
-          <p style="font-size:14px;color:var(--text);line-height:1.8;">
-            「選手一覧」タブを開き、選手の氏名・背番号・ポジションを入力して追加します。<br>
-            先に全選手を登録しておくと、試合入力がスムーズになります。
-          </p>
-        </div>
-
-        <div>
-          <div style="font-size:13px;color:var(--accent);font-weight:700;letter-spacing:1px;margin-bottom:10px;">STEP 3 ── 試合結果を入力する</div>
-          <p style="font-size:14px;color:var(--text);line-height:1.8;">
-            「試合追加」タブで対戦相手・日付・年度・種別（公式戦 / 練習試合）を入力して試合を登録します。<br>
-            その後「試合一覧」タブから各選手の打席結果（打数・安打・打点など）を入力すると、個人成績に反映されます。
-          </p>
-        </div>
-
-        <div>
-          <div style="font-size:13px;color:var(--accent);font-weight:700;letter-spacing:1px;margin-bottom:10px;">STEP 4 ── 成績を確認する</div>
-          <p style="font-size:14px;color:var(--text);line-height:1.8;">
-            「成績一覧」タブで各選手の通算打率・打点・本塁打などを確認できます。<br>
-            年度・公式戦/練習試合でフィルタリングも可能です。選手名をクリックすると試合ごとの詳細成績が表示されます。
-          </p>
-        </div>
-
-        <div style="border-top:1px solid var(--border);padding-top:20px;">
-          <div style="font-size:13px;color:var(--muted);font-weight:700;letter-spacing:1px;margin-bottom:10px;">パスワードを忘れた場合</div>
-          <p style="font-size:14px;color:var(--text);line-height:1.8;">
-            ログイン画面の「パスワードを忘れた方」からリセットメールを送信できます。<br>
-            メール内のリンクは短時間で有効期限が切れます。届いたらすぐにクリックしてください。<br>
-            メールが届かない場合は迷惑メールフォルダもご確認ください。
-          </p>
-        </div>
-
-      </div>
-    </div>
-  </div>
-
-  <!-- お問い合わせ -->
-
-  <div class="panel" id="panel-contact">
-    <div class="form-card" style="max-width:680px;margin:0 auto;">
-      <div class="form-title">お問い合わせ・ご要望</div>
-      <p style="font-size:13px;color:var(--muted);margin-bottom:20px;">不明点や機能のご要望などお気軽にお送りください。</p>
-      <div style="overflow:hidden;border-radius:10px;">
-        <iframe src="https://docs.google.com/forms/d/e/1FAIpQLSdR85z4Jg7H9HWdDD8FDCwX3IClKfrAH6IWPtSrYrAphf9Ncw/viewform?embedded=true" width="100%" height="860" frameborder="0" marginheight="0" marginwidth="0" style="display:block;">読み込んでいます…</iframe>
-      </div>
-    </div>
-  </div>
-
   <!-- 試合追加 -->
 
   <div class="panel" id="panel-add">
@@ -574,12 +424,6 @@ td { padding: 10px 6px; font-size: 12px; }
     <button class="bottom-nav-btn" id="bnav-add" onclick="switchTab('add')">
       <span class="nav-icon">➕</span><span>試合追加</span>
     </button>
-    <button class="bottom-nav-btn" id="bnav-help" onclick="switchTab('help')">
-      <span class="nav-icon">❓</span><span>使い方</span>
-    </button>
-    <button class="bottom-nav-btn" id="bnav-contact" onclick="switchTab('contact')">
-      <span class="nav-icon">✉️</span><span>お問い合わせ</span>
-    </button>
   </div>
 </nav>
 
@@ -588,240 +432,95 @@ td { padding: 10px 6px; font-size: 12px; }
 const SUPABASE_URL = 'https://zorxexynepvbaajblsfm.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvcnhleHluZXB2YmFhamJsc2ZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM5OTQ0MzgsImV4cCI6MjA4OTU3MDQzOH0.0C62pn7B1qiLXbLoqdEY5CXD8mn8Nb8K_RI8qL5VFGQ';
 
-const { createClient } = supabase;
-const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+// seiryo専用テーブルID（playersテーブルのrow id=10, gamesテーブルのrow id=11を使用）
+const SEIRYO_PLAYERS_ROW = 4;
+const SEIRYO_GAMES_ROW   = 2;
 
-const AUTH_TOKEN_KEY = 'sb-zorxexynepvbaajblsfm-auth-token';
-const TAB_NAMES = ['stats', 'register', 'games', 'add', 'help', 'contact'];
+const sb = {
+  async get(table, rowId) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${rowId}&select=*`, {
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+    });
+    const data = await res.json();
+    return data && data[0] ? data[0].data : null;
+  },
+  async upsert(table, rowId, data) {
+    // まず存在確認
+    const check = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${rowId}&select=id`, {
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+    });
+    const existing = await check.json();
+    if (existing && existing.length > 0) {
+      await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${rowId}`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ data })
+      });
+    } else {
+      await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify({ id: rowId, data })
+      });
+    }
+  }
+};
 
-let currentUser = null;
+const CORRECT_PASSWORD = 'kzy';
+
 let players = [];
 let games = [];
 let openGameId = null;
 let _isLoaded = false;
 let _sortKey = 'number';
 let _sortDir = 1;
-let _isSaving = false;
 // 選手別モーダル用の状態
-let _modalPid = null;
-let _statsRowOrder = [];
-let _statsFilteredGames = [];
+let _modalPid = null;          // 表示中の選手ID
+let _statsRowOrder = [];       // 成績一覧の現在の表示順（前/次選手ナビ用）
+let _statsFilteredGames = [];  // 成績一覧で適用中のフィルター結果（モーダルでも同じ条件を使う）
 
-// === ユーティリティ関数 ===
-
-function getSupabaseHeaders() {
-  const raw = localStorage.getItem(AUTH_TOKEN_KEY);
-  if (!raw) return null;
-  const session = JSON.parse(raw);
-  return {
-    'apikey': SUPABASE_KEY,
-    'Authorization': 'Bearer ' + session.access_token,
-    'Content-Type': 'application/json'
-  };
-}
-
-function showAuthPanel(panelId) {
-  ['auth-login', 'auth-signup', 'auth-reset', 'auth-newpassword']
-    .forEach(id => document.getElementById(id).style.display = (id === panelId ? 'block' : 'none'));
-  document.getElementById('auth-message').style.display = 'none';
-}
-
-function showAuthMessage(text, type = 'error') {
-  const msgEl = document.getElementById('auth-message');
-  msgEl.textContent = text;
-  msgEl.style.color = type === 'error' ? 'var(--red)' : 'var(--green)';
-  msgEl.style.display = 'block';
-}
-
-// === 認証 ===
-
-function toggleAuthMode() {
-  const loginEl  = document.getElementById('auth-login');
-  showAuthPanel(loginEl.style.display === 'none' ? 'auth-login' : 'auth-signup');
-}
-
-async function signIn() {
-  if (_isSaving) { alert('処理中です'); return; }
-  const email    = document.getElementById('auth-email').value.trim();
-  const password = document.getElementById('auth-password').value;
-  _isSaving = true;
-  try {
-    const { error } = await sb.auth.signInWithPassword({ email, password });
-    if (error) {
-      showAuthMessage(error.message === 'Invalid login credentials'
-        ? 'メールアドレスまたはパスワードが違います'
-        : 'ログインエラー: ' + error.message, 'error');
-    }
-  } finally {
-    _isSaving = false;
-  }
-}
-
-async function signUp() {
-  if (_isSaving) { alert('処理中です'); return; }
-  const teamName = document.getElementById('auth-team').value.trim();
-  const email    = document.getElementById('auth-email2').value.trim();
-  const password = document.getElementById('auth-password2').value;
-  if (!teamName) { showAuthMessage('チーム名を入力してください'); return; }
-  if (!email)    { showAuthMessage('メールアドレスを入力してください'); return; }
-  if (password.length < 6) { showAuthMessage('パスワードは6文字以上にしてください'); return; }
-  _isSaving = true;
-  try {
-    const { error } = await sb.auth.signUp({
-      email, password,
-      options: { data: { team_name: teamName } }
-    });
-    if (error) {
-      showAuthMessage('登録エラー: ' + error.message, 'error');
-    } else {
-      showAuthMessage('確認メールを送信しました。メールを確認してからログインしてください。', 'success');
-    }
-  } finally {
-    _isSaving = false;
-  }
-}
-
-function signOut() {
-  document.getElementById('logout-overlay').style.display = 'flex';
-}
-async function confirmSignOut() {
-  document.getElementById('logout-overlay').style.display = 'none';
-  try { await sb.auth.signOut(); } catch(e) { console.warn('signOut error:', e); }
-  // localStorageのセッションも削除
-  localStorage.removeItem('sb-zorxexynepvbaajblsfm-auth-token');
-  currentUser = null;
-  _isLoaded   = false;
-  players     = [];
-  games       = [];
-  document.getElementById('auth-screen').style.display = 'flex';
-  document.getElementById('app-content').style.display = 'none';
-}
-
-function showResetForm() {
-  showAuthPanel('auth-reset');
-}
-
-function showLoginForm() {
-  showAuthPanel('auth-login');
-}
-
-async function sendPasswordReset() {
-  if (_isSaving) { alert('処理中です'); return; }
-  const email = document.getElementById('auth-reset-email').value.trim();
-  if (!email) { showAuthMessage('メールアドレスを入力してください'); return; }
-  _isSaving = true;
-  try {
-    const { error } = await sb.auth.resetPasswordForEmail(email, {
-      redirectTo: 'https://baseball.versus.jp/baseball_stats.html'
-    });
-    if (error) {
-      const isRateLimit = error.message && (error.message.toLowerCase().includes('rate limit') || error.message.toLowerCase().includes('too many'));
-      showAuthMessage(isRateLimit
-        ? '送信回数の上限に達しました。1時間後に再試行してください。'
-        : 'エラー: ' + error.message, 'error');
-    } else {
-      showAuthMessage('リセットメールを送信しました。メールを確認してください。', 'success');
-    }
-  } finally {
-    _isSaving = false;
-  }
-}
-
-async function updatePassword() {
-  if (_isSaving) { alert('処理中です'); return; }
-  const pw  = document.getElementById('auth-new-pw').value;
-  const pw2 = document.getElementById('auth-new-pw2').value;
-  if (pw.length < 6) { showAuthMessage('パスワードは6文字以上にしてください'); return; }
-  if (pw !== pw2) { showAuthMessage('パスワードが一致しません'); return; }
-  _isSaving = true;
-  try {
-    const { error } = await sb.auth.updateUser({ password: pw });
-    if (error) {
-      showAuthMessage('エラー: ' + error.message, 'error');
-    } else {
-      showAuthMessage('パスワードを更新しました。ログインしてください。', 'success');
-      await sb.auth.signOut();
-      setTimeout(() => showLoginForm(), 2000);
-    }
-  } finally {
-    _isSaving = false;
-  }
-}
-
-// URLハッシュにエラーが含まれる場合（リンク失効など）を検知
-(function() {
-  const hash = window.location.hash;
-  if (hash.includes('error=access_denied') || hash.includes('otp_expired') || hash.includes('error_code=')) {
-    window.location.hash = '';
-    window.addEventListener('DOMContentLoaded', function() {
-      showResetForm();
-      const msgEl = document.getElementById('auth-message');
-      if (msgEl) {
-        msgEl.style.color = 'var(--red)';
-        msgEl.textContent = 'リンクの有効期限が切れています。再度パスワードリセットを行ってください。';
-        msgEl.style.display = 'block';
-      }
-    });
-  }
-})();
-
-// Auth状態を監視（ページ読み込み時＆変更時に実行）
-sb.auth.onAuthStateChange(async (event, session) => {
-  if (event === 'PASSWORD_RECOVERY') {
-    // パスワードリセットリンクを踏んだ場合→新パスワード設定画面を表示
-    document.getElementById('auth-screen').style.display = 'flex';
-    document.getElementById('app-content').style.display = 'none';
-    document.getElementById('auth-login').style.display       = 'none';
-    document.getElementById('auth-signup').style.display      = 'none';
-    document.getElementById('auth-reset').style.display       = 'none';
-    document.getElementById('auth-newpassword').style.display = 'block';
-    document.getElementById('auth-message').style.display     = 'none';
-    return;
-  }
-  if (session && session.user) {
-    currentUser = session.user;
-    const teamName = currentUser.user_metadata?.team_name || 'MY TEAM';
-    const el = document.getElementById('team-name-display');
-    if (el) el.textContent = teamName;
-    document.getElementById('auth-screen').style.display = 'none';
+function checkPassword() {
+  const input = document.getElementById('pw-input').value.trim();
+  if (input === CORRECT_PASSWORD) {
+    sessionStorage.setItem('bs_auth', '1');
+    document.getElementById('lock-screen').style.display = 'none';
     document.getElementById('app-content').style.display = 'block';
-    if (!_isLoaded) await loadFromSupabase();
+    document.getElementById('pw-error').style.display = 'none';
+    loadFromSupabase();
   } else {
-    currentUser = null;
-    _isLoaded   = false;
-    players     = [];
-    games       = [];
-    document.getElementById('auth-screen').style.display = 'flex';
-    document.getElementById('app-content').style.display = 'none';
+    document.getElementById('pw-error').style.display = 'block';
   }
-});
+}
 
 window.addEventListener('DOMContentLoaded', () => {
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('game-date').value = today;
-  let saved = 'compact';
-  try { saved = localStorage.getItem('statsMode') || 'compact'; } catch(e) {}
-  setStatsMode(saved);
+  if (sessionStorage.getItem('bs_auth') === '1') {
+    document.getElementById('lock-screen').style.display = 'none';
+    document.getElementById('app-content').style.display = 'block';
+    loadFromSupabase();
+  }
 });
 
 async function loadFromSupabase() {
-  if (!currentUser) { showToast('ログインしてください'); return; }
   showToast('データを読み込み中...');
   _isLoaded = false;
   try {
-    const headers = getSupabaseHeaders();
-    if (!headers) { showToast('読み込みエラー（未ログイン）'); return; }
-    const uid = currentUser.id;
-
-    const [playerRes, gameRes] = await Promise.all([
-      fetch(SUPABASE_URL + '/rest/v1/players?select=data&user_id=eq.' + uid, { headers }),
-      fetch(SUPABASE_URL + '/rest/v1/games?select=data&user_id=eq.' + uid,   { headers })
+    const [p, g] = await Promise.all([
+      sb.get('players', SEIRYO_PLAYERS_ROW),
+      sb.get('games', SEIRYO_GAMES_ROW)
     ]);
-
-    const playerRows = await playerRes.json();
-    const gameRows = await gameRes.json();
-    players   = (playerRows[0]?.data) || [];
-    games     = (gameRows[0]?.data) || [];
+    players = p || [];
+    games   = g || [];
     _isLoaded = true;
     renderAll();
     showToast('読み込み完了！');
@@ -831,31 +530,15 @@ async function loadFromSupabase() {
   }
 }
 
-
 async function saveToSupabase() {
-  if (!currentUser) return;
   try {
-    const headers = getSupabaseHeaders();
-    if (!headers) return;
-    const preferHeader = { ...headers, 'Prefer': 'resolution=merge-duplicates,return=minimal' };
-    const uid = currentUser.id;
-
-    const [playerRes, gameRes] = await Promise.all([
-      fetch(SUPABASE_URL + '/rest/v1/players?on_conflict=user_id', {
-        method: 'POST', headers: preferHeader,
-        body: JSON.stringify({ user_id: uid, data: players })
-      }),
-      fetch(SUPABASE_URL + '/rest/v1/games?on_conflict=user_id', {
-        method: 'POST', headers: preferHeader,
-        body: JSON.stringify({ user_id: uid, data: games })
-      })
+    await Promise.all([
+      sb.upsert('players', SEIRYO_PLAYERS_ROW, players),
+      sb.upsert('games',   SEIRYO_GAMES_ROW,   games)
     ]);
-
-    if (!playerRes.ok || !gameRes.ok) {
-      console.error('save error', playerRes.status, gameRes.status);
-    }
   } catch(e) {
-    dbgShow('catch: ' + e.message);
+    console.error(e);
+    showToast('保存エラーが発生しました');
   }
 }
 
@@ -1233,11 +916,7 @@ function addDetailRowSilent(gid, pid) {
 function addDetailRow(gid, pid) {
   addDetailRowSilent(gid, pid);
   const paEl = document.getElementById(`ps-pa-${gid}-${pid}`);
-  if (paEl) {
-    let current = parseInt(paEl.value) || 0;
-    if (current < 0) current = 0;
-    paEl.value = Math.min(99, current + 1);
-  }
+  if (paEl) paEl.value = Math.min(99, parseInt(paEl.value || 0) + 1);
 }
 
 function renumDetail(gid, pid) {
@@ -1417,32 +1096,26 @@ async function saveStats(gid) {
 }
 
 async function saveGame() {
-  if (_isSaving) { alert('保存中です。お待ちください'); return; }
-  if (!currentUser) { alert('ログインしてください'); return; }
+  if (!_isLoaded) { showToast('読み込み中です。少し待ってください'); return; }
   const opponent = document.getElementById('game-opponent').value;
   if (!opponent) { alert('対戦相手を入力してください'); return; }
-  _isSaving = true;
-  try {
-    const g = {
-      id: Date.now(),
-      season: document.getElementById('game-season').value,
-      type: document.getElementById('game-type').value,
-      tournament: document.getElementById('game-tournament').value.trim(),
-      date: document.getElementById('game-date').value,
-      opponent,
-      us: parseInt(document.getElementById('game-score-us').value || 0),
-      them: parseInt(document.getElementById('game-score-them').value || 0),
-      stats: []
-    };
-    games.push(g);
-    await saveToSupabase();
-    openGameId = g.id;
-    renderAll();
-    switchTab('games');
-    showToast('試合を登録しました　→ 成績を入力してください');
-  } finally {
-    _isSaving = false;
-  }
+  const g = {
+    id: Date.now(),
+    season: document.getElementById('game-season').value,
+    type: document.getElementById('game-type').value,
+    tournament: document.getElementById('game-tournament').value.trim(),
+    date: document.getElementById('game-date').value,
+    opponent,
+    us: parseInt(document.getElementById('game-score-us').value || 0),
+    them: parseInt(document.getElementById('game-score-them').value || 0),
+    stats: []
+  };
+  games.push(g);
+  await saveToSupabase();
+  openGameId = g.id;
+  renderAll();
+  switchTab('games');
+  showToast('試合を登録しました　→ 成績を入力してください');
 }
 
 async function deleteGame(id) {
@@ -1498,25 +1171,19 @@ async function updatePlayer(id) {
 }
 
 async function addPlayer() {
-  if (_isSaving) { alert('保存中です。お待ちください'); return; }
+  if (!_isLoaded) { showToast('読み込み中です。少し待ってください'); return; }
   const num  = document.getElementById('reg-number').value;
   const name = document.getElementById('reg-name').value.trim();
   const pos  = document.getElementById('reg-pos').value;
   if (!name) { alert('氏名を入力してください'); return; }
   if (num === '' || isNaN(num)) { alert('背番号を入力してください'); return; }
-  if (!currentUser) { alert('ログインしてください'); return; }
-  _isSaving = true;
-  try {
-    players.push({ id: Date.now(), number: parseInt(num), name, pos });
-    document.getElementById('reg-name').value = '';
-    document.getElementById('reg-number').value = '';
-    renderPlayerList();
-    renderStats();
-    await saveToSupabase();
-    showToast('選手を追加しました');
-  } finally {
-    _isSaving = false;
-  }
+  players.push({ id: Date.now(), number: parseInt(num), name, pos });
+  await saveToSupabase();
+  document.getElementById('reg-name').value = '';
+  document.getElementById('reg-number').value = '';
+  renderPlayerList();
+  renderStats();
+  showToast('選手を追加しました');
 }
 
 async function deletePlayer(id) {
@@ -1527,13 +1194,16 @@ async function deletePlayer(id) {
 }
 
 function switchTab(name) {
-  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', TAB_NAMES[i]===name));
+  const names = ['stats','register','games','add'];
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', names[i]===name));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById(`panel-${name}`).classList.add('active');
-  TAB_NAMES.forEach(n => {
+  // ボトムナビ更新
+  names.forEach(n => {
     const btn = document.getElementById(`bnav-${n}`);
     if (btn) btn.classList.toggle('active', n === name);
   });
+  // ページトップへ
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -1568,6 +1238,12 @@ function setStatsMode(mode) {
   }
   try { localStorage.setItem('statsMode', mode); } catch(e) {}
 }
+// 起動時に保存済みモードを復元（デフォルトはコンパクト）
+(function initStatsMode(){
+  let saved = 'compact';
+  try { saved = localStorage.getItem('statsMode') || 'compact'; } catch(e) {}
+  setStatsMode(saved);
+})();
 
 // ===== 選手別 試合成績モーダル =====
 // 指定した試合リストでの選手成績を計算（calcFilteredと同じ集計ロジックの再利用版）
