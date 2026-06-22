@@ -24,7 +24,7 @@
   <script type="text/babel">
     const { useState, useRef, useEffect } = React;
 
-    const APP_VERSION = "v2026.06.22-5";
+    const APP_VERSION = "v2026.06.22-6";
 
     // Supabase接続
     const SUPABASE_URL = "https://zorxexynepvbaajblsfm.supabase.co";
@@ -3603,6 +3603,7 @@ function GamesTab({ team, onStartRecord, onStartOrder, onResume, onEdit }) {
 // ─────────────────────────────
 function SeasonStatsTab({ team }) {
   const [games, setGames] = useState([]);
+  const [allPlayers, setAllPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState("all");
   const [rangeFilter, setRangeFilter] = useState("all"); // "all" | "5" | "10" | "YYYY"
@@ -3612,12 +3613,22 @@ function SeasonStatsTab({ team }) {
 
   useEffect(() => {
     if (!team) return;
-    supabase
-      .from("nsb_games")
-      .select("id, game_date, opponent, score_my, score_opp, status, season, game_type, game_log")
-      .eq("team_name", team.name)
-      .order("game_date", { ascending: false })
-      .then(({ data }) => { setGames(data || []); setLoading(false); });
+    Promise.all([
+      supabase
+        .from("nsb_games")
+        .select("id, game_date, opponent, score_my, score_opp, status, season, game_type, game_log")
+        .eq("team_name", team.name)
+        .order("game_date", { ascending: false }),
+      supabase
+        .from("nsb_players")
+        .select("number, name")
+        .eq("team_id", team.id)
+        .order("number"),
+    ]).then(([gRes, pRes]) => {
+      setGames(gRes.data || []);
+      setAllPlayers(pRes.data || []);
+      setLoading(false);
+    });
   }, [team]);
 
   // 種別フィルター
@@ -3634,7 +3645,23 @@ function SeasonStatsTab({ team }) {
     return typeFiltered;
   }, [typeFiltered, rangeFilter]);
 
-  const seasonStats = React.useMemo(() => calcSeasonStats(filtered), [filtered]);
+  const rawSeasonStats = React.useMemo(() => calcSeasonStats(filtered), [filtered]);
+
+  // 全選手をマージ: 成績あり→そのまま、成績なし→空レコード（"-"表示用）
+  const seasonStats = React.useMemo(() => {
+    const EMPTY_STATS = { pa:0, atBats:0, hits:0, h1:0, h2:0, h3:0, hr:0, tb:0, rbi:0, run:0,
+      bb:0, ibb:0, hbp:0, so:0, sac:0, sb:0, risp_ab:0, risp_hit:0 };
+    const statsMap = {};
+    rawSeasonStats.forEach(s => { statsMap[String(s.number)] = s; });
+    const merged = allPlayers.map(p => {
+      const s = statsMap[String(p.number)];
+      return s ? s : { ...EMPTY_STATS, number: p.number, name: p.name, pos: "-", order: 99, noStats: true };
+    });
+    // 成績あり→番号順、成績なし→末尾に番号順
+    const withStats    = merged.filter(s => !s.noStats).sort((a, b) => parseInt(a.number) - parseInt(b.number));
+    const withoutStats = merged.filter(s =>  s.noStats).sort((a, b) => parseInt(a.number) - parseInt(b.number));
+    return [...withStats, ...withoutStats];
+  }, [rawSeasonStats, allPlayers]);
 
   // 選手クリック時の試合別成績
   const playerGames = React.useMemo(() => {
@@ -3761,44 +3788,49 @@ function SeasonStatsTab({ team }) {
             </div>
 
             {/* 選手行 */}
-            {seasonStats.map((s, i) => (
-              <div key={s.number} onClick={() => setSelectedPlayer(s)}
-                style={{ display:"flex", alignItems:"center", padding: compact ? "10px 12px" : "8px 12px",
-                  borderBottom:`1px solid ${C.divider}`, background: i%2===0 ? C.card : C.bg, cursor:"pointer",
-                  minWidth: compact ? "auto" : detailMinWidth }}
-                onPointerDown={e => e.currentTarget.style.opacity="0.7"}
-                onPointerUp={e => e.currentTarget.style.opacity="1"}
-                onPointerLeave={e => e.currentTarget.style.opacity="1"}
-              >
-                <div style={{ width: compact ? 80 : NW, flexShrink:0, minWidth: compact ? 80 : NW }}>
-                  <div style={{ fontSize:12, fontWeight:700, color:C.textPri, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{s.name}</div>
-                  <div style={{ fontSize:10, color:C.textTer }}>#{s.number}</div>
+            {seasonStats.map((s, i) => {
+              const dash = s.noStats;
+              const dimColor = C.textTer;
+              return (
+                <div key={s.number} onClick={() => !dash && setSelectedPlayer(s)}
+                  style={{ display:"flex", alignItems:"center", padding: compact ? "10px 12px" : "8px 12px",
+                    borderBottom:`1px solid ${C.divider}`, background: i%2===0 ? C.card : C.bg,
+                    cursor: dash ? "default" : "pointer", opacity: dash ? 0.45 : 1,
+                    minWidth: compact ? "auto" : detailMinWidth }}
+                  onPointerDown={e => !dash && (e.currentTarget.style.opacity="0.7")}
+                  onPointerUp={e => e.currentTarget.style.opacity= dash ? "0.45" : "1"}
+                  onPointerLeave={e => e.currentTarget.style.opacity= dash ? "0.45" : "1"}
+                >
+                  <div style={{ width: compact ? 80 : NW, flexShrink:0, minWidth: compact ? 80 : NW }}>
+                    <div style={{ fontSize:12, fontWeight:700, color:C.textPri, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{s.name}</div>
+                    <div style={{ fontSize:10, color:C.textTer }}>#{s.number}</div>
+                  </div>
+                  {compact ? (
+                    <>
+                      <div style={{ width:44, textAlign:"center", fontSize:13, fontWeight:dash?400:700, color:dash?dimColor:C.textPri, flexShrink:0 }}>{dash?"-":sAvg(s)}</div>
+                      <div style={{ width:44, textAlign:"center", fontSize:12, color:dash?dimColor:C.textSec, flexShrink:0 }}>{dash?"-":sOBP(s)}</div>
+                      <div style={{ width:44, textAlign:"center", fontSize:12, color:dash?dimColor:C.textSec, flexShrink:0 }}>{dash?"-":sSLG(s)}</div>
+                      <div style={{ width:44, textAlign:"center", fontSize:13, fontWeight:dash?400:700, color:dash?dimColor:C.brand, flexShrink:0 }}>{dash?"-":sOPS(s)}</div>
+                      <div style={{ width:44, textAlign:"center", fontSize:12, color:dash?dimColor:C.textSec, flexShrink:0 }}>{dash?"-":sWOBA(s)}</div>
+                    </>
+                  ) : (
+                    <>
+                      {[s.pa, s.atBats, s.hits, s.h2, s.h3, s.hr, s.rbi, s.run, s.bb, s.so, s.sb, s.tb].map((v, vi) => (
+                        <div key={vi} style={{ width:CW, textAlign:"center", fontSize:11, flexShrink:0,
+                          color: dash ? dimColor : [5,6,7,10].includes(vi)&&v>0 ? C.brand : C.textPri,
+                          fontWeight: !dash&&[5,6,7,10].includes(vi)&&v>0 ? 700 : 400 }}>{dash?"-":v}</div>
+                      ))}
+                      <div style={{ width:RW, textAlign:"center", fontSize:11, color:dash?dimColor:s.risp_ab>0?C.brand:C.textTer, flexShrink:0 }}>{dash?"-":sRISP(s)}</div>
+                      <div style={{ width:RW, textAlign:"center", fontSize:11, color:dash?dimColor:C.textPri, flexShrink:0 }}>{dash?"-":sAvg(s)}</div>
+                      <div style={{ width:RW, textAlign:"center", fontSize:11, color:dash?dimColor:C.textSec, flexShrink:0 }}>{dash?"-":sOBP(s)}</div>
+                      <div style={{ width:RW, textAlign:"center", fontSize:11, color:dash?dimColor:C.textSec, flexShrink:0 }}>{dash?"-":sSLG(s)}</div>
+                      <div style={{ width:RW, textAlign:"center", fontSize:12, fontWeight:dash?400:700, color:dash?dimColor:C.brand, flexShrink:0 }}>{dash?"-":sOPS(s)}</div>
+                      <div style={{ width:RW, textAlign:"center", fontSize:11, color:dash?dimColor:C.textSec, flexShrink:0 }}>{dash?"-":sISO(s)}</div>
+                    </>
+                  )}
                 </div>
-                {compact ? (
-                  <>
-                    <div style={{ width:44, textAlign:"center", fontSize:13, fontWeight:700, color:C.textPri, flexShrink:0 }}>{sAvg(s)}</div>
-                    <div style={{ width:44, textAlign:"center", fontSize:12, color:C.textSec, flexShrink:0 }}>{sOBP(s)}</div>
-                    <div style={{ width:44, textAlign:"center", fontSize:12, color:C.textSec, flexShrink:0 }}>{sSLG(s)}</div>
-                    <div style={{ width:44, textAlign:"center", fontSize:13, fontWeight:700, color:C.brand, flexShrink:0 }}>{sOPS(s)}</div>
-                    <div style={{ width:44, textAlign:"center", fontSize:12, color:C.textSec, flexShrink:0 }}>{sWOBA(s)}</div>
-                  </>
-                ) : (
-                  <>
-                    {[s.pa, s.atBats, s.hits, s.h2, s.h3, s.hr, s.rbi, s.run, s.bb, s.so, s.sb, s.tb].map((v, vi) => (
-                      <div key={vi} style={{ width:CW, textAlign:"center", fontSize:11, flexShrink:0,
-                        color:[5,6,7,10].includes(vi)&&v>0 ? C.brand : C.textPri,
-                        fontWeight:[5,6,7,10].includes(vi)&&v>0 ? 700 : 400 }}>{v}</div>
-                    ))}
-                    <div style={{ width:RW, textAlign:"center", fontSize:11, color:s.risp_ab>0?C.brand:C.textTer, flexShrink:0 }}>{sRISP(s)}</div>
-                    <div style={{ width:RW, textAlign:"center", fontSize:11, color:C.textPri, flexShrink:0 }}>{sAvg(s)}</div>
-                    <div style={{ width:RW, textAlign:"center", fontSize:11, color:C.textSec, flexShrink:0 }}>{sOBP(s)}</div>
-                    <div style={{ width:RW, textAlign:"center", fontSize:11, color:C.textSec, flexShrink:0 }}>{sSLG(s)}</div>
-                    <div style={{ width:RW, textAlign:"center", fontSize:12, fontWeight:700, color:C.brand, flexShrink:0 }}>{sOPS(s)}</div>
-                    <div style={{ width:RW, textAlign:"center", fontSize:11, color:C.textSec, flexShrink:0 }}>{sISO(s)}</div>
-                  </>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
