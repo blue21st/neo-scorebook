@@ -24,7 +24,7 @@
   <script type="text/babel">
     const { useState, useRef, useEffect } = React;
 
-    const APP_VERSION = "v2026.06.22-2";
+    const APP_VERSION = "v2026.06.22-3";
 
     // Supabase接続
     const SUPABASE_URL = "https://zorxexynepvbaajblsfm.supabase.co";
@@ -311,7 +311,7 @@ function MiniDiamond({ runners }) {
   );
 }
 
-function HistoryView({ gameLog, teamNameA, teamNameB }) {
+function HistoryView({ gameLog, teamNameA, teamNameB, substitutions = [] }) {
   const [expanded, setExpanded] = useState({});
   const toggle = (key) => setExpanded(e => ({ ...e, [key]: !e[key] }));
 
@@ -342,6 +342,23 @@ function HistoryView({ gameLog, teamNameA, teamNameB }) {
                 : <span style={{ fontSize:11, color: C.scoreSubText }}>得点なし</span>
               }
             </div>
+            {/* 選手交代記録（このイニング・この攻撃チームの交代） */}
+            {substitutions
+              .filter(s => s.inning === half.inning && ((s.isTop) === (half.topBottom === "表")))
+              .map((s, si) => (
+                <div key={`sub-${si}`} style={{ margin:"0 16px", padding:"8px 14px", borderBottom:`1px solid ${C.divider}`, background:"#F5F3EC", display:"flex", alignItems:"center", gap:6 }}>
+                  <span style={{ fontSize:10, fontWeight:700, color:"#8B7A2A", background:"#F0E8C0", padding:"2px 7px", borderRadius:10, flexShrink:0 }}>
+                    {s.type}
+                  </span>
+                  <span style={{ fontSize:12, color: C.textSec, flex:1 }}>
+                    {s.type === "ポジションチェンジ"
+                      ? `#${s.outNumber} ${s.outName} ⇔ #${s.inNumber} ${s.inName}`
+                      : `#${s.outNumber} ${s.outName} → #${s.inNumber} ${s.inName}`}
+                  </span>
+                  <span style={{ fontSize:10, color: C.textTer }}>{s.outs}死</span>
+                </div>
+              ))
+            }
             {/* 打席一覧 */}
             {half.atBats.map((ab, ai) => {
               const key = `${hi}-${ai}`;
@@ -430,6 +447,11 @@ function StatsView({ gameLog, teamNameA, teamNameB }) {
             pa: 0, atBats: 0, hits: 0, rbi: 0, hr: 0, sb: 0,
             bb: 0, hbp: 0, so: 0, sac: 0,
           };
+        } else if (stats[ab.number].order === 99 || stats[ab.number].name === `#${ab.number}`) {
+          // 盗塁スタブとして先に作られた場合は実際の打席情報で上書き
+          stats[ab.number].name  = ab.name;
+          stats[ab.number].order = ab.order;
+          stats[ab.number].pos   = ab.pos;
         }
         const s = stats[ab.number];
         const r = ab.result;
@@ -2960,7 +2982,7 @@ function GameRecordScreen({ onBack, gameOrder, teamName, resumeData = null }) {
           </div>
 
           {/* 経過ビュー */}
-          {activeView === "history" && <HistoryView gameLog={gameLog} teamNameA={activeTeamA} teamNameB={oppTeamName}/>}
+          {activeView === "history" && <HistoryView gameLog={gameLog} substitutions={substitutions} teamNameA={activeTeamA} teamNameB={oppTeamName}/>}
 
           {/* 成績ビュー */}
           {activeView === "stats" && (
