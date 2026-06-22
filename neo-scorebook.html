@@ -24,7 +24,7 @@
   <script type="text/babel">
     const { useState, useRef, useEffect } = React;
 
-    const APP_VERSION = "v2026.06.17-1";
+    const APP_VERSION = "v2026.06.22-1";
 
     // Supabase接続
     const SUPABASE_URL = "https://zorxexynepvbaajblsfm.supabase.co";
@@ -3364,7 +3364,7 @@ function GamesTab({ team, onStartRecord, onStartOrder, onResume, onEdit }) {
       <div style={{ background: C.scoreBg, padding: "20px 20px 16px" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
           <div style={{ fontSize: 9, color: C.scoreSubText, letterSpacing: "0.15em", opacity: 0.8 }}>NEO SCORE BOOK</div>
-          <div style={{ fontSize: 9, color: C.scoreSubText, opacity: 0.6 }}>{APP_VERSION}</div>
+          <div style={{ fontSize: 11, color: C.scoreSubText, opacity: 0.85, fontWeight: 600, letterSpacing: "0.05em" }}>{APP_VERSION}</div>
         </div>
         <div style={{ fontSize: 22, fontWeight: 800, color: C.scoreText, marginBottom: 4 }}>{team ? team.name : "チーム名"}</div>
         <div style={{ fontSize: 12, color: C.scoreSubText }}>
