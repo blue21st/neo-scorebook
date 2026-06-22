@@ -1804,6 +1804,7 @@ function OrderRegistration({ onNext, onBack, teamId }) {
 // ─────────────────────────────
 function SubstitutionModal({
   activeBattersA, activeBattersB, benchA, benchB,
+  substitutions,
   activeTeamA, oppTeamName,
   subStep, setSubStep, subTeam, setSubTeam, subType, setSubType,
   subOutSlot, setSubOutSlot, subInPlayer, setSubInPlayer,
@@ -1887,14 +1888,28 @@ function SubstitutionModal({
           {subStep === SUB_STEPS.IN && <>
             {subBench.length === 0
               ? <div style={{ padding:"40px 20px", textAlign:"center", color:C.textSec, fontSize:14 }}>ベンチに選手がいません</div>
-              : subBench.map((p, i) => (
-                  <div key={i} onClick={() => { setSubInPlayer(p); setSubNewPos(p.pos || "-"); setSubStep(SUB_STEPS.POS); }}
-                    style={{ display:"flex", alignItems:"center", padding:"14px 20px", borderBottom:`1px solid ${C.divider}`, cursor:"pointer" }}>
-                    <div style={{ width:28, fontSize:11, color:C.textTer }}>#{p.number}</div>
-                    <div style={{ flex:1, fontSize:14, fontWeight:600, color:C.textPri }}>{p.name}</div>
-                    <div style={{ fontSize:11, padding:"2px 8px", background:C.bg, borderRadius:6, color:C.textSec, border:`1px solid ${C.divider}` }}>{p.pos || "-"}</div>
-                  </div>
-                ))
+              : (() => {
+                  const usedNums = new Set(
+                    (substitutions || [])
+                      .filter(s => s.inNumber != null)
+                      .map(s => s.inNumber)
+                  );
+                  return subBench.map((p, i) => {
+                    const used = usedNums.has(p.number);
+                    return (
+                      <div key={i}
+                        onClick={used ? undefined : () => { setSubInPlayer(p); setSubNewPos(p.pos || "-"); setSubStep(SUB_STEPS.POS); }}
+                        style={{ display:"flex", alignItems:"center", padding:"14px 20px", borderBottom:`1px solid ${C.divider}`,
+                          cursor: used ? "default" : "pointer", opacity: used ? 0.4 : 1 }}>
+                        <div style={{ width:28, fontSize:11, color:C.textTer }}>#{p.number}</div>
+                        <div style={{ flex:1, fontSize:14, fontWeight:600, color:C.textPri }}>{p.name}</div>
+                        <div style={{ fontSize:11, padding:"2px 8px", background:C.bg, borderRadius:6, color:C.textSec, border:`1px solid ${C.divider}` }}>
+                          {used ? "出場済" : (p.pos || "-")}
+                        </div>
+                      </div>
+                    );
+                  });
+                })()
             }
             {backBtn(null, () => setSubStep(SUB_STEPS.OUT))}
           </>}
@@ -2749,6 +2764,7 @@ function GameRecordScreen({ onBack, gameOrder, teamName, resumeData = null }) {
           <SubstitutionModal
             activeBattersA={activeBattersA} activeBattersB={activeBattersB}
             benchA={benchA} benchB={benchB}
+            substitutions={substitutions}
             activeTeamA={activeTeamA} oppTeamName={oppTeamName}
             subStep={subStep} setSubStep={setSubStep}
             subTeam={subTeam} setSubTeam={setSubTeam}
