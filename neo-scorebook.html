@@ -414,26 +414,24 @@ function HistoryView({ gameLog, teamNameA, teamNameB }) {
 // ── メインコンポーネント ──
 const isPitcher = (pos) => pos === "ピッチャー" || pos === "投";
 
-function StatsView({ gameLog, battersA, battersB, teamNameA, teamNameB }) {
+function StatsView({ gameLog, teamNameA, teamNameB }) {
   const [tab, setTab] = useState("batter");
 
   // gameLogから打者・投手成績を集計
-  const calcStats = (batters, isTop) => {
+  const calcStats = (isTop) => {
+    // gameLog から全選手を自動収集（交代選手も含む）
     const stats = {};
-    batters.forEach(b => {
-      stats[b.number] = {
-        ...b, pa: 0, atBats: 0, hits: 0, rbi: 0, hr: 0, sb: 0,
-        bb: 0, hbp: 0, so: 0, sac: 0,
-        // 投手
-        pitches: 0, outs: 0, pHits: 0, strikeouts: 0, walks: 0, pHbp: 0, runs: 0,
-      };
-    });
-
     gameLog.forEach(half => {
       if ((half.topBottom === "表") !== isTop) return;
       half.atBats.forEach(ab => {
+        if (!stats[ab.number]) {
+          stats[ab.number] = {
+            number: ab.number, name: ab.name, order: ab.order, pos: ab.pos,
+            pa: 0, atBats: 0, hits: 0, rbi: 0, hr: 0, sb: 0,
+            bb: 0, hbp: 0, so: 0, sac: 0,
+          };
+        }
         const s = stats[ab.number];
-        if (!s) return;
         const r = ab.result;
         if (!r) return;
 
@@ -493,20 +491,22 @@ function StatsView({ gameLog, battersA, battersB, teamNameA, teamNameB }) {
     });
 
     // 投手成績（相手の攻撃イニングを集計）
-    const pitcherStats = {};
-    batters.filter(b => isPitcher(b.pos)).forEach(b => {
-      pitcherStats[b.number] = { ...b, pitches: 0, outs: 0, pHits: 0, strikeouts: 0, walks: 0, pHbp: 0, runs: 0 };
-    });
+    // 自チームの選手情報をレジストリ化（投手名の参照用）
+    const teamRegistry = {};
+    Object.values(stats).forEach(p => { teamRegistry[p.number] = p; });
 
-    // 相手チームの攻撃イニングを集計（各打席のpitcherNumberで投手を特定）
+    const pitcherStats = {};
     gameLog.forEach(half => {
       if ((half.topBottom === "表") === isTop) return; // 相手の攻撃のみ
       half.atBats.forEach(ab => {
         const r = ab.result;
-        if (!r) return;
-        // この打席の投手を特定
-        const ps = ab.pitcherNumber ? pitcherStats[ab.pitcherNumber] : null;
-        if (!ps) return;
+        if (!r || !ab.pitcherNumber) return;
+        if (!pitcherStats[ab.pitcherNumber]) {
+          const info = teamRegistry[ab.pitcherNumber]
+            || { number: ab.pitcherNumber, name: `#${ab.pitcherNumber}`, order: 99, pos: "投" };
+          pitcherStats[ab.pitcherNumber] = { ...info, pitches: 0, outs: 0, pHits: 0, strikeouts: 0, walks: 0, pHbp: 0, runs: 0 };
+        }
+        const ps = pitcherStats[ab.pitcherNumber];
         // 投球数
         ps.pitches += ab.pitches?.length || 0;
         // アウト（新表記：遊ゴロ・左フライ等、旧表記：ゴロアウト等、三振）
@@ -534,8 +534,8 @@ function StatsView({ gameLog, battersA, battersB, teamNameA, teamNameB }) {
     };
   };
 
-  const statsA = React.useMemo(() => calcStats(battersA, true),  [gameLog, battersA]);
-  const statsB = React.useMemo(() => calcStats(battersB, false), [gameLog, battersB]);
+  const statsA = React.useMemo(() => calcStats(true),  [gameLog]);
+  const statsB = React.useMemo(() => calcStats(false), [gameLog]);
   const gameAvg  = (h, ab) => ab === 0 ? "-" : (h / ab).toFixed(3).replace("0.", ".");
   const gameOBP  = (b) => {
     const denom = b.atBats + (b.bb||0) + (b.ibb||0) + (b.hbp||0) + (b.sf||0);
@@ -618,7 +618,7 @@ function StatsView({ gameLog, battersA, battersB, teamNameA, teamNameB }) {
     </>
   );
 
-  const PitcherTable = ({ pitchers, stats, teamName }) => (
+  const PitcherTable = ({ stats, teamName }) => (
     <>
       <div style={{ padding: "6px 14px", background: C.scoreBg, borderBottom: `1px solid ${C.divider}` }}>
         <span style={{ fontSize: 12, fontWeight: 700, color: C.scoreText }}>{teamName}</span>
@@ -629,15 +629,14 @@ function StatsView({ gameLog, battersA, battersB, teamNameA, teamNameB }) {
           <div key={h} style={{ width: 30, fontSize: 10, color: C.textTer, fontWeight: 600, textAlign: "center", flexShrink: 0 }}>{h}</div>
         ))}
       </div>
-      {pitchers.map((b, i) => {
-        const ps = stats.pitching.find(p => p.number === b.number);
-        const innings = ps ? `${Math.floor(ps.outs / 3)}${ps.outs % 3 > 0 ? "." + (ps.outs % 3) : ""}` : "0";
+      {stats.pitching.map((ps, i) => {
+        const innings = `${Math.floor(ps.outs / 3)}${ps.outs % 3 > 0 ? "." + (ps.outs % 3) : ""}`;
         return (
           <div key={i} style={{ padding: "8px 14px", display: "flex", alignItems: "center", borderBottom: `1px solid ${C.divider}` }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 12, fontWeight: 500, color: C.textPri }}>#{b.number} {b.name}</div>
+              <div style={{ fontSize: 12, fontWeight: 500, color: C.textPri }}>#{ps.number} {ps.name}</div>
             </div>
-            {[innings, ps?.pitches ?? 0, ps?.pHits ?? 0, ps?.strikeouts ?? 0, ps?.walks ?? 0, ps?.pHbp ?? 0, ps?.runs ?? 0].map((v, vi) => (
+            {[innings, ps.pitches, ps.pHits, ps.strikeouts, ps.walks, ps.pHbp, ps.runs].map((v, vi) => (
               <div key={vi} style={{ width: 30, fontSize: 12, textAlign: "center", flexShrink: 0, color: vi === 6 && v > 0 ? "#8B2020" : C.textPri, fontWeight: vi === 6 && v > 0 ? 700 : 400 }}>{v}</div>
             ))}
           </div>
@@ -669,12 +668,9 @@ function StatsView({ gameLog, battersA, battersB, teamNameA, teamNameB }) {
 
       {/* 投手成績 */}
       {tab === "pitcher" && <>
-        <PitcherTable pitchers={battersA.filter(b => isPitcher(b.pos))} stats={statsA} teamName={teamNameA}/>
+        <PitcherTable stats={statsA} teamName={teamNameA}/>
         <div style={{ height: 8, background: C.bg }}/>
-        <PitcherTable pitchers={battersB.filter(b => isPitcher(b.pos))} stats={statsB} teamName={teamNameB}/>
-        <div style={{ padding: "16px 14px", textAlign: "center", fontSize: 11, color: C.textTer }}>
-          投手成績の詳細集計は今後実装予定
-        </div>
+        <PitcherTable stats={statsB} teamName={teamNameB}/>
       </>}
     </div>
   );
@@ -2930,7 +2926,7 @@ function GameRecordScreen({ onBack, gameOrder, teamName, resumeData = null }) {
 
           {/* 成績ビュー */}
           {activeView === "stats" && (
-            <StatsView gameLog={gameLog} battersA={activeBattersA} battersB={activeBattersB} teamNameA={activeTeamA} teamNameB={oppTeamName}/>
+            <StatsView gameLog={gameLog} teamNameA={activeTeamA} teamNameB={oppTeamName}/>
           )}
 
           {activeView === "settings" && (
