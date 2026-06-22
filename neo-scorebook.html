@@ -24,7 +24,7 @@
   <script type="text/babel">
     const { useState, useRef, useEffect } = React;
 
-    const APP_VERSION = "v2026.06.22-3";
+    const APP_VERSION = "v2026.06.22-4";
 
     // Supabase接続
     const SUPABASE_URL = "https://zorxexynepvbaajblsfm.supabase.co";
@@ -315,12 +315,55 @@ function HistoryView({ gameLog, teamNameA, teamNameB, substitutions = [] }) {
   const [expanded, setExpanded] = useState({});
   const toggle = (key) => setExpanded(e => ({ ...e, [key]: !e[key] }));
 
-  const resultColor = (result) => {
-    if (!result) return C.textTer;
-    if (result.includes("犠飛")) return C.textPri;
-    if (isOutResult(result)) return "#8B2020";
-    if (["ヒット","二塁打","三塁打","本塁打","1塁打","2塁打","3塁打","ホームラン","エラー","野選","FC","フォアボール","デッドボール","振り逃げ"].some(r => result.includes(r))) return C.brand;
-    return C.textPri;
+  const runnerStateText = (runners, outs) => {
+    const outStr = ["無死", "一死", "二死"][outs] ?? "─";
+    const occ = [];
+    if (runners?.third)  occ.push("三");
+    if (runners?.second) occ.push("二");
+    if (runners?.first)  occ.push("一");
+    if (occ.length === 0) return `${outStr}走者なし`;
+    if (occ.length === 3) return `${outStr}満塁`;
+    return `${outStr}${occ.join("")}塁`;
+  };
+
+  const countOutsFromResult = (result) => {
+    if (!result) return 0;
+    if (result.includes("ゲッツー")) return 2;
+    if (result.includes("トリプルプレー")) return 3;
+    if (isOutResult(result) && !result.includes("振り逃げ")) return 1;
+    return 0;
+  };
+
+  const resultBadge = (result) => {
+    if (!result) return null;
+    if (isOutResult(result)) return { bg:"#FDECEA", color:"#C0392B" };
+    if (["ヒット","二塁打","三塁打","本塁打","1塁打","2塁打","3塁打","ホームラン"].some(h => result.includes(h)))
+      return { bg:"#E8F5E9", color:"#27AE60" };
+    if (result.includes("フォアボール") || result.includes("デッドボール"))
+      return { bg:"#E3F2FD", color:"#1565C0" };
+    if (result.includes("エラー") || result.includes("FC") || result.includes("野選"))
+      return { bg:"#FFF3E0", color:"#E65100" };
+    if (result.includes("犠")) return { bg:"#F3E5F5", color:"#6A1B9A" };
+    return { bg:C.brandLight, color:C.brand };
+  };
+
+  const eventBadgeColor = (ev) => {
+    if (!ev) return { bg:C.brandLight, color:C.brand };
+    if (ev.includes("アウト") || ev.includes("三振") || ev.includes("ゴロ") || ev.includes("フライ") || ev.includes("ライナー"))
+      return { bg:"#FDECEA", color:"#C0392B" };
+    if (["ヒット","二塁打","三塁打","本塁打","ホームラン","得点"].some(h => ev.includes(h)))
+      return { bg:"#E8F5E9", color:"#27AE60" };
+    if (ev.includes("フォアボール") || ev.includes("デッドボール"))
+      return { bg:"#E3F2FD", color:"#1565C0" };
+    return { bg:"#F0F0F0", color:"#666" };
+  };
+
+  const subLine = (s) => {
+    if (s.type === "ポジションチェンジ")
+      return `守備変更: ${s.outName}・${s.inName} ポジションチェンジ`;
+    if (s.type === "投手交代")
+      return `投手交代: ${s.outName} → ${s.inName}`;
+    return `守備交代: ${s.outName} → ${s.inName}`;
   };
 
   if (gameLog.length === 0) {
@@ -330,97 +373,125 @@ function HistoryView({ gameLog, teamNameA, teamNameB, substitutions = [] }) {
   return (
     <div style={{ overflowY:"auto", maxHeight:480, background: C.bg }}>
       {gameLog.map((half, hi) => {
-        const inningRuns = half.atBats.reduce((sum, ab) => sum + (ab.runsScored || 0), 0);
         const isAttackA = half.topBottom === "表";
+        const teamName = isAttackA ? (teamNameA || "表") : (teamNameB || "裏");
+        const inningRuns = half.atBats.reduce((sum, ab) => sum + (ab.runsScored || 0), 0);
+        const halfSubs = substitutions.filter(s =>
+          s.inning === half.inning && s.isTop === (half.topBottom === "表")
+        );
+
+        // 各打席の開始時アウト数を計算
+        let outsAcc = 0;
+        const outsAtStart = half.atBats.map(ab => {
+          const o = outsAcc;
+          outsAcc += countOutsFromResult(ab.result);
+          return o;
+        });
+
         return (
           <div key={hi}>
             {/* イニングヘッダー */}
-            <div style={{ padding:"8px 16px", background: C.scoreBg, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-              <span style={{ fontSize:12, fontWeight:700, color: C.scoreText }}>{half.inning}回{half.topBottom} {half.topBottom === "表" ? (teamNameA || "表") : (teamNameB || "裏")} 攻撃</span>
+            <div style={{ padding:"10px 16px 8px", background: C.scoreBg, display:"flex", justifyContent:"space-between", alignItems:"center", borderBottom:`2px solid ${C.divider}` }}>
+              <span style={{ fontSize:13, fontWeight:700, color: C.scoreText }}>
+                {half.inning}回{half.topBottom}　{teamName}の攻撃
+              </span>
               {inningRuns > 0
-                ? <span style={{ fontSize:12, fontWeight:700, color:"#F0C040" }}>+{inningRuns}点</span>
-                : <span style={{ fontSize:11, color: C.scoreSubText }}>得点なし</span>
+                ? <span style={{ fontSize:12, fontWeight:700, color:"#D4A017" }}>{inningRuns}点</span>
+                : <span style={{ fontSize:11, color: C.scoreSubText }}>無得点</span>
               }
             </div>
-            {/* 選手交代記録（このイニング・この攻撃チームの交代） */}
-            {substitutions
-              .filter(s => s.inning === half.inning && ((s.isTop) === (half.topBottom === "表")))
-              .map((s, si) => (
-                <div key={`sub-${si}`} style={{ margin:"0 16px", padding:"8px 14px", borderBottom:`1px solid ${C.divider}`, background:"#F5F3EC", display:"flex", alignItems:"center", gap:6 }}>
-                  <span style={{ fontSize:10, fontWeight:700, color:"#8B7A2A", background:"#F0E8C0", padding:"2px 7px", borderRadius:10, flexShrink:0 }}>
-                    {s.type}
-                  </span>
-                  <span style={{ fontSize:12, color: C.textSec, flex:1 }}>
-                    {s.type === "ポジションチェンジ"
-                      ? `#${s.outNumber} ${s.outName} ⇔ #${s.inNumber} ${s.inName}`
-                      : `#${s.outNumber} ${s.outName} → #${s.inNumber} ${s.inName}`}
-                  </span>
-                  <span style={{ fontSize:10, color: C.textTer }}>{s.outs}死</span>
-                </div>
-              ))
-            }
-            {/* 打席一覧 */}
+
+            {/* 打席一覧 + 交代記録をインターリーブ */}
             {half.atBats.map((ab, ai) => {
               const key = `${hi}-${ai}`;
               const isOpen = expanded[key];
+              const outs = outsAtStart[ai];
+              const stateText = runnerStateText(ab.runnersAtStart, outs);
               const scored = (ab.runsScored || 0) > 0;
-              const scoreStr = scored ? `${ab.scoreAfterA ?? "?"} - ${ab.scoreAfterB ?? "?"}` : null;
-              const isInterrupted = !ab.result && hi < gameLog.length - 1 && ai === half.atBats.length - 1;
+              const badge = resultBadge(ab.result);
+              const isInterrupted = !ab.result && (hi < gameLog.length - 1) && ai === half.atBats.length - 1;
+
+              // この打席後に発生した交代
+              const subsAfter = halfSubs.filter(s => s.atBatIdx === ai);
+
               return (
-                <div key={ai} style={{ borderBottom:`1px solid ${C.divider}`, background: scored ? "#F0F8F0" : C.card, margin:"0 16px 0", borderRadius: isOpen ? "0" : "0" }}>
-                  <div onClick={() => toggle(key)} style={{ padding:"10px 14px", display:"flex", alignItems:"center", gap:6, cursor:"pointer", userSelect:"none" }}>
-                    <span style={{ fontSize:11, color: C.textTer, width:28, flexShrink:0 }}>{ab.order}番</span>
-                    <span style={{ fontSize:13, fontWeight:600, color: C.textPri, flex:1 }}>#{ab.number} {ab.name}</span>
-                    <span style={{ fontSize:12, fontWeight:600, color: isInterrupted ? C.textTer : resultColor(ab.result) }}>
-                      {ab.result ?? (isInterrupted ? "─" : "打席中")}
-                    </span>
-                    {scored && (
-                      <span style={{ fontSize:11, fontWeight:700, background: C.brandLight, color: C.brand, padding:"2px 8px", borderRadius:20, flexShrink:0 }}>
-                        +{ab.runsScored}
-                      </span>
-                    )}
-                    {scoreStr && (
-                      <span style={{ fontSize:11, fontWeight:600, color: C.brand, flexShrink:0 }}>
-                        → {scoreStr}
-                      </span>
-                    )}
-                    <span style={{ fontSize:10, color: C.textTer, display:"inline-block", transform:isOpen?"rotate(180deg)":"rotate(0deg)", transition:"transform 0.15s" }}>▼</span>
-                  </div>
-                  {isOpen && (
-                    <div style={{ padding:"8px 14px 12px", background: C.bg }}>
-                      {/* ランナーの動き */}
-                      {(ab.runnersAtStart || ab.runnersAfter) && (
-                        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
-                          <div style={{ textAlign:"center" }}>
-                            <div style={{ fontSize:9, color: C.textTer, marginBottom:3 }}>打席前</div>
-                            <MiniDiamond runners={ab.runnersAtStart ?? RUNNERS_INIT}/>
-                          </div>
-                          <div style={{ fontSize:16, color: C.textTer }}>→</div>
-                          <div style={{ textAlign:"center" }}>
-                            <div style={{ fontSize:9, color: C.textTer, marginBottom:3 }}>打席後</div>
-                            <MiniDiamond runners={ab.runnersAfter ?? ab.runnersAtStart ?? RUNNERS_INIT}/>
-                          </div>
-                        </div>
-                      )}
-                      {/* 投球チップ */}
-                      <div style={{ display:"flex", gap:4, flexWrap:"wrap", marginBottom:ab.events.length?6:0 }}>
-                        {ab.pitches.map((p, pi) => {
-                          const s = CHIP[p] || { bg: C.brandLight, color: C.brand };
-                          return <span key={pi} style={{ fontSize:10, padding:"2px 8px", borderRadius:20, fontWeight:600, background:s.bg, color:s.color }}>{CHIP[p]?.label ?? p}</span>;
-                        })}
+                <div key={ai}>
+                  {/* 打席行 */}
+                  <div style={{ borderBottom:`1px solid ${C.divider}`, background: scored ? "#F2FAF2" : C.card }}>
+                    <div onClick={() => toggle(key)} style={{ padding:"10px 16px", display:"flex", alignItems:"center", gap:6, cursor:"pointer", userSelect:"none" }}>
+                      <span style={{ fontSize:11, color: C.textTer, minWidth:28, flexShrink:0 }}>{ab.order}番</span>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <span style={{ fontSize:13, fontWeight:600, color: C.textPri }}>{ab.name}</span>
+                        <span style={{ fontSize:11, color: C.textTer, marginLeft:6 }}>{stateText}</span>
                       </div>
-                      {ab.events.map((ev, ei) => (
-                        <div key={ei} style={{ fontSize:11, color: C.brand, marginTop:4 }}>▶ {ev}</div>
-                      ))}
-                      {ab.pitches.length === 0 && ab.events.length === 0 && (
-                        <span style={{ fontSize:11, color: C.textTer }}>投球なし</span>
+                      {badge && (
+                        <span style={{ fontSize:11, fontWeight:700, padding:"2px 9px", borderRadius:12, background:badge.bg, color:badge.color, flexShrink:0, maxWidth:120, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                          {ab.result}
+                        </span>
                       )}
+                      {isInterrupted && (
+                        <span style={{ fontSize:11, color:C.textTer, flexShrink:0 }}>打席中</span>
+                      )}
+                      {scored && (
+                        <span style={{ fontSize:11, fontWeight:700, color:"#27AE60", flexShrink:0 }}>+{ab.runsScored}点</span>
+                      )}
+                      <span style={{ fontSize:10, color:C.textTer, flexShrink:0, display:"inline-block", transform:isOpen?"rotate(180deg)":"rotate(0deg)", transition:"transform 0.15s" }}>▼</span>
                     </div>
-                  )}
+
+                    {/* 展開時：イベントリスト */}
+                    {isOpen && (
+                      <div style={{ padding:"4px 16px 12px 50px", background: C.bg, borderTop:`1px solid ${C.divider}` }}>
+                        {ab.events.length === 0 && ab.pitches.length === 0 && (
+                          <span style={{ fontSize:11, color:C.textTer }}>記録なし</span>
+                        )}
+                        {ab.events.map((ev, ei) => {
+                          const bc = eventBadgeColor(ev);
+                          return (
+                            <div key={ei} style={{ display:"flex", alignItems:"flex-start", gap:8, marginTop:6 }}>
+                              <div style={{ width:20, height:20, borderRadius:"50%", background:bc.bg, color:bc.color, fontSize:10, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1 }}>
+                                {ei + 1}
+                              </div>
+                              <span style={{ fontSize:12, color:C.textPri, lineHeight:"20px" }}>{ev}</span>
+                            </div>
+                          );
+                        })}
+                        {/* 投球チップ */}
+                        {ab.pitches.length > 0 && (
+                          <div style={{ display:"flex", gap:4, flexWrap:"wrap", marginTop:8 }}>
+                            {ab.pitches.map((p, pi) => {
+                              const s = CHIP[p] || { bg:"#F0F0F0", color:"#666", label:p };
+                              return <span key={pi} style={{ fontSize:10, padding:"2px 7px", borderRadius:16, fontWeight:600, background:s.bg, color:s.color }}>{s.label ?? p}</span>;
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* この打席後の交代記録 */}
+                  {subsAfter.map((s, si) => (
+                    <div key={`sub-${ai}-${si}`} style={{ padding:"7px 16px 7px 44px", borderBottom:`1px solid ${C.divider}`, background:"#FAFAF3", display:"flex", alignItems:"center", gap:6 }}>
+                      <span style={{ fontSize:10, fontWeight:700, color:"#7A6A10", background:"#F0E8B0", padding:"1px 7px", borderRadius:10, flexShrink:0 }}>
+                        {s.type}
+                      </span>
+                      <span style={{ fontSize:12, color:"#5A5000" }}>{subLine(s)}</span>
+                    </div>
+                  ))}
                 </div>
               );
             })}
-            <div style={{ height:8, background: C.bg }}/>
+
+            {/* atBatIdx が未設定の旧データは末尾に表示 */}
+            {halfSubs.filter(s => s.atBatIdx == null).map((s, si) => (
+              <div key={`sub-end-${si}`} style={{ padding:"7px 16px 7px 44px", borderBottom:`1px solid ${C.divider}`, background:"#FAFAF3", display:"flex", alignItems:"center", gap:6 }}>
+                <span style={{ fontSize:10, fontWeight:700, color:"#7A6A10", background:"#F0E8B0", padding:"1px 7px", borderRadius:10, flexShrink:0 }}>
+                  {s.type}
+                </span>
+                <span style={{ fontSize:12, color:"#5A5000" }}>{subLine(s)}</span>
+              </div>
+            ))}
+
+            <div style={{ height:10, background: C.bg }}/>
           </div>
         );
       })}
@@ -2443,6 +2514,7 @@ function GameRecordScreen({ onBack, gameOrder, teamName, resumeData = null }) {
       inning, isTop, slot: subOutSlot,
       type: newPos === "投" ? "投手交代" : "守備交代",
       outs, balls, strikes,
+      atBatIdx: currentAtBatIdx,
       outNumber: outPlayer.number, outName: outPlayer.name,
       inNumber: subInPlayer.number, inName: subInPlayer.name,
       runnersSnapshot: { ...runners },
@@ -2466,6 +2538,7 @@ function GameRecordScreen({ onBack, gameOrder, teamName, resumeData = null }) {
     setSubstitutions(s => [...s, {
       inning, isTop, slot: null, type: "ポジションチェンジ",
       outs, balls, strikes,
+      atBatIdx: currentAtBatIdx,
       slot1: subOutSlot, slot2: subSwapSlot1,
       outNumber: p1.number, outName: p1.name,
       inNumber:  p2.number, inName:  p2.name,
