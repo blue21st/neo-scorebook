@@ -24,7 +24,7 @@
   <script type="text/babel">
     const { useState, useRef, useEffect } = React;
 
-    const APP_VERSION = "v2026.06.22-4";
+    const APP_VERSION = "v2026.06.22-5";
 
     // Supabase接続
     const SUPABASE_URL = "https://zorxexynepvbaajblsfm.supabase.co";
@@ -99,6 +99,11 @@
     const ChevronDown = ({size=24,color="currentColor",strokeWidth=2}) => (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
         <polyline points="6 9 12 15 18 9"/>
+      </svg>
+    );
+    const Trash2 = ({size=24,color="currentColor",strokeWidth=2}) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
       </svg>
     );
 
@@ -3422,6 +3427,8 @@ function GamesTab({ team, onStartRecord, onStartOrder, onResume, onEdit }) {
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState("all");
+  const [deleteConfirm, setDeleteConfirm] = useState(null); // game object to delete
+  const [deleting, setDeleting] = useState(false);
   const currentYear = new Date().getFullYear();
 
   useEffect(() => {
@@ -3451,6 +3458,15 @@ function GamesTab({ team, onStartRecord, onStartOrder, onResume, onEdit }) {
     if (g.score_my > g.score_opp) return { text: "勝", bg: C.brandLight, color: C.brand };
     if (g.score_my < g.score_opp) return { text: "負", bg: "#FEF0F0", color: "#8B2020" };
     return { text: "分", bg: "#F0F0F0", color: C.textSec };
+  };
+
+  const handleDelete = async () => {
+    if (!deleteConfirm) return;
+    setDeleting(true);
+    await supabase.from("nsb_games").delete().eq("id", deleteConfirm.id);
+    setGames(gs => gs.filter(g => g.id !== deleteConfirm.id));
+    setDeleteConfirm(null);
+    setDeleting(false);
   };
 
   return (
@@ -3524,19 +3540,27 @@ function GamesTab({ team, onStartRecord, onStartOrder, onResume, onEdit }) {
               {filtered.map((g, i) => {
                 const rl = resultLabel(g);
                 return (
-                  <div key={g.id}
-                    onClick={g.status === "in_progress"
-                      ? () => onResume && onResume(g.id)
-                      : () => onEdit && onEdit(g.id)}
-                    style={{ display: "flex", alignItems: "center", padding: "13px 16px", borderBottom: i < filtered.length - 1 ? `1px solid ${C.divider}` : "none", cursor: "pointer" }}>
-                    <div style={{ width: 36, fontSize: 11, color: C.textTer, flexShrink: 0 }}>{fmtDate(g.game_date)}</div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: C.textPri }}>vs {g.opponent}</div>
-                      {g.game_type && <div style={{ fontSize: 10, color: C.textTer }}>{g.game_type}</div>}
+                  <div key={g.id} style={{ display: "flex", alignItems: "center", padding: "13px 16px", borderBottom: i < filtered.length - 1 ? `1px solid ${C.divider}` : "none" }}>
+                    <div style={{ flex:1, display:"flex", alignItems:"center", gap:0, cursor:"pointer", minWidth:0 }}
+                      onClick={g.status === "in_progress"
+                        ? () => onResume && onResume(g.id)
+                        : () => onEdit && onEdit(g.id)}>
+                      <div style={{ width: 36, fontSize: 11, color: C.textTer, flexShrink: 0 }}>{fmtDate(g.game_date)}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: C.textPri }}>vs {g.opponent}</div>
+                        {g.game_type && <div style={{ fontSize: 10, color: C.textTer }}>{g.game_type}</div>}
+                      </div>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: C.textPri, marginRight: 8 }}>{g.score_my} - {g.score_opp}</div>
+                      <div style={{ width: 26, height: 26, borderRadius: "50%", background: rl.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <span style={{ fontSize: 11, fontWeight: 800, color: rl.color }}>{rl.text}</span>
+                      </div>
                     </div>
-                    <div style={{ fontSize: 15, fontWeight: 800, color: C.textPri, marginRight: 8 }}>{g.score_my} - {g.score_opp}</div>
-                    <div style={{ width: 26, height: 26, borderRadius: "50%", background: rl.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <span style={{ fontSize: 11, fontWeight: 800, color: rl.color }}>{rl.text}</span>
+                    <div onClick={e => { e.stopPropagation(); setDeleteConfirm(g); }}
+                      style={{ marginLeft:10, padding:6, cursor:"pointer", flexShrink:0, opacity:0.45 }}
+                      onPointerDown={e => e.currentTarget.style.opacity="1"}
+                      onPointerUp={e => e.currentTarget.style.opacity="0.45"}
+                      onPointerLeave={e => e.currentTarget.style.opacity="0.45"}>
+                      <Trash2 size={16} color="#8B2020"/>
                     </div>
                   </div>
                 );
@@ -3545,6 +3569,31 @@ function GamesTab({ team, onStartRecord, onStartOrder, onResume, onEdit }) {
           )}
         </div>
       </div>
+
+      {/* 削除確認ダイアログ */}
+      {deleteConfirm && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:400, display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}
+          onClick={() => !deleting && setDeleteConfirm(null)}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background:C.card, borderRadius:20, padding:"24px 20px", width:"100%", maxWidth:340, boxShadow:"0 8px 40px rgba(0,0,0,0.25)" }}>
+            <div style={{ fontSize:17, fontWeight:800, color:"#8B2020", marginBottom:6 }}>試合を削除</div>
+            <div style={{ fontSize:13, color:C.textSec, marginBottom:20 }}>
+              vs {deleteConfirm.opponent}（{fmtDate(deleteConfirm.game_date)}）を削除します。<br/>
+              <span style={{ fontWeight:700 }}>この操作は取り消せません。</span>
+            </div>
+            <div style={{ display:"flex", gap:10 }}>
+              <div onClick={() => setDeleteConfirm(null)}
+                style={{ flex:1, padding:"12px 0", borderRadius:50, background:C.bg, textAlign:"center", fontSize:14, fontWeight:700, color:C.textSec, cursor:"pointer" }}>
+                キャンセル
+              </div>
+              <div onClick={handleDelete}
+                style={{ flex:1, padding:"12px 0", borderRadius:50, background:deleting?"#ccc":"#8B2020", textAlign:"center", fontSize:14, fontWeight:700, color:"#fff", cursor:deleting?"default":"pointer" }}>
+                {deleting ? "削除中..." : "削除する"}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -3556,6 +3605,7 @@ function SeasonStatsTab({ team }) {
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState("all");
+  const [rangeFilter, setRangeFilter] = useState("all"); // "all" | "5" | "10" | "YYYY"
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [compact, setCompact] = useState(true);
   const currentYear = new Date().getFullYear();
@@ -3570,10 +3620,19 @@ function SeasonStatsTab({ team }) {
       .then(({ data }) => { setGames(data || []); setLoading(false); });
   }, [team]);
 
-  const filtered = games.filter(g => {
-    if (typeFilter !== "all" && g.game_type !== typeFilter) return false;
-    return true;
-  });
+  // 種別フィルター
+  const typeFiltered = games.filter(g => typeFilter === "all" || g.game_type === typeFilter);
+
+  // 年度リスト（降順）
+  const years = [...new Set(typeFiltered.map(g => g.game_date ? new Date(g.game_date).getFullYear() : null).filter(Boolean))].sort((a, b) => b - a);
+
+  // 期間フィルター
+  const filtered = React.useMemo(() => {
+    if (rangeFilter === "5")  return typeFiltered.slice(0, 5);
+    if (rangeFilter === "10") return typeFiltered.slice(0, 10);
+    if (/^\d{4}$/.test(rangeFilter)) return typeFiltered.filter(g => g.game_date && new Date(g.game_date).getFullYear() === parseInt(rangeFilter));
+    return typeFiltered;
+  }, [typeFiltered, rangeFilter]);
 
   const seasonStats = React.useMemo(() => calcSeasonStats(filtered), [filtered]);
 
@@ -3608,7 +3667,9 @@ function SeasonStatsTab({ team }) {
         return sum;
       }, 0);
       const hr = atBats.filter(ab => { const r = ab.result||""; return r.includes("本塁打")||r.includes("ホームラン"); }).length;
-      return { game, pa: atBats.length, atBats: ab, hits: h, rbi, hr };
+      const h2 = atBats.filter(ab => { const r = ab.result||""; return r.includes("二塁打")||r.includes("2塁打"); }).length;
+      const h3 = atBats.filter(ab => { const r = ab.result||""; return r.includes("三塁打")||r.includes("3塁打"); }).length;
+      return { game, pa: atBats.length, atBats: ab, hits: h, h2, h3, rbi, hr };
     }).filter(Boolean);
   }, [selectedPlayer, filtered]);
 
@@ -3618,21 +3679,43 @@ function SeasonStatsTab({ team }) {
 
   const fmtDate = (d) => { if (!d) return ""; const dt = new Date(d); return `${dt.getMonth()+1}/${dt.getDate()}`; };
 
+  const FilterChip = ({ value, label, current, onChange }) => (
+    <div onClick={() => onChange(value)}
+      style={{ fontSize:11, padding:"4px 10px", borderRadius:20, cursor:"pointer", whiteSpace:"nowrap",
+        fontWeight: current === value ? 700 : 400,
+        background: current === value ? "rgba(255,255,255,0.25)" : "transparent",
+        color: current === value ? C.scoreText : C.scoreSubText,
+        border: `1px solid ${current === value ? "rgba(255,255,255,0.5)" : "transparent"}` }}>
+      {label}
+    </div>
+  );
+
+  // 詳細モードの列幅
+  const CW = 30; // count column width
+  const RW = 38; // rate column width
+  const NW = 76; // name column width
+  const detailMinWidth = NW + 12 * CW + 5 * RW; // 76+360+190=626
+
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
       {/* ヘッダー */}
       <div style={{ background: C.scoreBg, padding: "16px 16px 12px", flexShrink: 0 }}>
         <div style={{ fontSize: 16, fontWeight: 800, color: C.scoreText, marginBottom: 8 }}>シーズン成績</div>
-        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+        {/* 種別フィルター */}
+        <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:6 }}>
           {[["all","すべて"],["公式戦","公式戦"],["練習試合","練習試合"]].map(([v, label]) => (
-            <div key={v} onClick={() => setTypeFilter(v)}
-              style={{ fontSize: 11, padding: "4px 10px", borderRadius: 20, cursor: "pointer", fontWeight: typeFilter === v ? 700 : 400,
-                background: typeFilter === v ? "rgba(255,255,255,0.25)" : "transparent",
-                color: typeFilter === v ? C.scoreText : C.scoreSubText, border: `1px solid ${typeFilter === v ? "rgba(255,255,255,0.5)" : "transparent"}` }}>
-              {label}
-            </div>
+            <FilterChip key={v} value={v} label={label} current={typeFilter} onChange={v => { setTypeFilter(v); setRangeFilter("all"); }}/>
           ))}
-          <div style={{ marginLeft: "auto", fontSize: 11, color: C.scoreSubText }}>{filtered.length}試合</div>
+          <div style={{ marginLeft:"auto", fontSize:11, color:C.scoreSubText }}>{filtered.length}試合</div>
+        </div>
+        {/* 期間フィルター */}
+        <div style={{ display:"flex", gap:6, overflowX:"auto", paddingBottom:2 }}>
+          <FilterChip value="all" label="すべて" current={rangeFilter} onChange={setRangeFilter}/>
+          <FilterChip value="5"   label="直近5試合" current={rangeFilter} onChange={setRangeFilter}/>
+          <FilterChip value="10"  label="直近10試合" current={rangeFilter} onChange={setRangeFilter}/>
+          {years.map(y => (
+            <FilterChip key={y} value={String(y)} label={`${y}年`} current={rangeFilter} onChange={setRangeFilter}/>
+          ))}
         </div>
       </div>
 
@@ -3643,70 +3726,80 @@ function SeasonStatsTab({ team }) {
           <div style={{ fontSize: 13, color: C.textTer }}>試合記録がありません</div>
         </div>
       ) : (
-        <div style={{ flex: 1, overflowY: "auto" }}>
+        <div style={{ flex: 1, display:"flex", flexDirection:"column", overflowY:"auto" }}>
           {/* 表示切替 */}
-          <div style={{ display:"flex", justifyContent:"flex-end", padding:"8px 16px 4px" }}>
+          <div style={{ display:"flex", justifyContent:"flex-end", padding:"8px 16px 4px", flexShrink:0 }}>
             <div onClick={() => setCompact(!compact)}
               style={{ fontSize: 11, color: C.brand, fontWeight: 600, cursor: "pointer", padding:"4px 10px", borderRadius:20, background: C.brandLight }}>
               {compact ? "詳細表示" : "コンパクト"}
             </div>
           </div>
 
-          {/* ヘッダー行 */}
-          <div style={{ display:"flex", padding:"4px 16px 4px 12px", borderBottom:`1px solid ${C.divider}`, background: C.card }}>
-            <div style={{ width: 80, fontSize: 10, color: C.textTer, flexShrink: 0 }}>選手</div>
-            {compact ? (
-              <>
-                <div style={{ width:36, textAlign:"center", fontSize:10, color:C.textTer, flexShrink:0 }}>打率</div>
-                <div style={{ width:36, textAlign:"center", fontSize:10, color:C.textTer, flexShrink:0 }}>出塁</div>
-                <div style={{ width:36, textAlign:"center", fontSize:10, color:C.textTer, flexShrink:0 }}>長打</div>
-                <div style={{ width:36, textAlign:"center", fontSize:10, color:C.brand, flexShrink:0, fontWeight:700 }}>OPS</div>
-                <div style={{ width:36, textAlign:"center", fontSize:10, color:C.textTer, flexShrink:0 }}>wOBA</div>
-              </>
-            ) : (
-              <>
-                {["打席","打数","安打","二塁","三塁","本塁","打点","得点","四球","三振","盗塁","長打","得点圏","打率","出塁","OPS","ISO"].map(h => (
-                  <div key={h} style={{ width:36, textAlign:"center", fontSize:10, color: h==="OPS"?C.brand:C.textTer, flexShrink:0, fontWeight: h==="OPS"?700:400 }}>{h}</div>
-                ))}
-              </>
-            )}
-          </div>
-
-          {/* 選手行 */}
-          {seasonStats.map((s, i) => (
-            <div key={s.number} onClick={() => setSelectedPlayer(s)}
-              style={{ display:"flex", alignItems:"center", padding:"10px 16px 10px 12px",
-                borderBottom:`1px solid ${C.divider}`, background: i%2===0 ? C.card : C.bg, cursor:"pointer" }}
-              onPointerDown={e => e.currentTarget.style.opacity="0.7"}
-              onPointerUp={e => e.currentTarget.style.opacity="1"}
-              onPointerLeave={e => e.currentTarget.style.opacity="1"}
-            >
-              <div style={{ width: 80, flexShrink: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: C.textPri }}>{s.name}</div>
-                <div style={{ fontSize: 10, color: C.textTer }}>#{s.number}</div>
-              </div>
+          {/* テーブル（詳細モードは横スクロール） */}
+          <div style={{ overflowX: compact ? "visible" : "auto", flex:1 }}>
+            {/* ヘッダー行 */}
+            <div style={{ display:"flex", padding:"4px 12px", borderBottom:`1px solid ${C.divider}`, background:C.card, position:"sticky", top:0, zIndex:1, minWidth: compact ? "auto" : detailMinWidth }}>
+              <div style={{ width: compact ? 80 : NW, fontSize:10, color:C.textTer, flexShrink:0 }}>選手</div>
               {compact ? (
                 <>
-                  <div style={{ width:36, textAlign:"center", fontSize:13, fontWeight:700, color:C.textPri, flexShrink:0 }}>{sAvg(s)}</div>
-                  <div style={{ width:36, textAlign:"center", fontSize:12, color:C.textSec, flexShrink:0 }}>{sOBP(s)}</div>
-                  <div style={{ width:36, textAlign:"center", fontSize:12, color:C.textSec, flexShrink:0 }}>{sSLG(s)}</div>
-                  <div style={{ width:36, textAlign:"center", fontSize:13, fontWeight:700, color:C.brand, flexShrink:0 }}>{sOPS(s)}</div>
-                  <div style={{ width:36, textAlign:"center", fontSize:12, color:C.textSec, flexShrink:0 }}>{sWOBA(s)}</div>
+                  <div style={{ width:44, textAlign:"center", fontSize:10, color:C.textTer, flexShrink:0 }}>打率</div>
+                  <div style={{ width:44, textAlign:"center", fontSize:10, color:C.textTer, flexShrink:0 }}>出塁</div>
+                  <div style={{ width:44, textAlign:"center", fontSize:10, color:C.textTer, flexShrink:0 }}>長打</div>
+                  <div style={{ width:44, textAlign:"center", fontSize:10, color:C.brand, flexShrink:0, fontWeight:700 }}>OPS</div>
+                  <div style={{ width:44, textAlign:"center", fontSize:10, color:C.textTer, flexShrink:0 }}>wOBA</div>
                 </>
               ) : (
                 <>
-                  {[s.pa, s.atBats, s.hits, s.h2, s.h3, s.hr, s.rbi, s.run, s.bb, s.so, s.sb, s.tb].map((v, vi) => (
-                    <StatCell key={vi} v={v} hi={[5,6,7,10].includes(vi)}/>
+                  {["打席","打数","安打","二塁","三塁","本塁","打点","得点","四球","三振","盗塁","長打"].map(h => (
+                    <div key={h} style={{ width:CW, textAlign:"center", fontSize:9, color:C.textTer, flexShrink:0 }}>{h}</div>
                   ))}
-                  <div style={{ width:36, textAlign:"center", fontSize:11, color: s.risp_ab>0?C.brand:C.textTer, flexShrink:0 }}>{sRISP(s)}</div>
-                  <div style={{ width:36, textAlign:"center", fontSize:11, color:C.textPri, flexShrink:0 }}>{sAvg(s)}</div>
-                  <div style={{ width:36, textAlign:"center", fontSize:11, color:C.textSec, flexShrink:0 }}>{sOBP(s)}</div>
-                  <div style={{ width:36, textAlign:"center", fontSize:12, fontWeight:700, color:C.brand, flexShrink:0 }}>{sOPS(s)}</div>
-                  <div style={{ width:36, textAlign:"center", fontSize:11, color:C.textSec, flexShrink:0 }}>{sISO(s)}</div>
+                  {["得点圏","打率","出塁","長打","OPS","ISO"].map(h => (
+                    <div key={h} style={{ width:RW, textAlign:"center", fontSize:9, color:h==="OPS"?C.brand:C.textTer, flexShrink:0, fontWeight:h==="OPS"?700:400 }}>{h}</div>
+                  ))}
                 </>
               )}
             </div>
-          ))}
+
+            {/* 選手行 */}
+            {seasonStats.map((s, i) => (
+              <div key={s.number} onClick={() => setSelectedPlayer(s)}
+                style={{ display:"flex", alignItems:"center", padding: compact ? "10px 12px" : "8px 12px",
+                  borderBottom:`1px solid ${C.divider}`, background: i%2===0 ? C.card : C.bg, cursor:"pointer",
+                  minWidth: compact ? "auto" : detailMinWidth }}
+                onPointerDown={e => e.currentTarget.style.opacity="0.7"}
+                onPointerUp={e => e.currentTarget.style.opacity="1"}
+                onPointerLeave={e => e.currentTarget.style.opacity="1"}
+              >
+                <div style={{ width: compact ? 80 : NW, flexShrink:0, minWidth: compact ? 80 : NW }}>
+                  <div style={{ fontSize:12, fontWeight:700, color:C.textPri, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{s.name}</div>
+                  <div style={{ fontSize:10, color:C.textTer }}>#{s.number}</div>
+                </div>
+                {compact ? (
+                  <>
+                    <div style={{ width:44, textAlign:"center", fontSize:13, fontWeight:700, color:C.textPri, flexShrink:0 }}>{sAvg(s)}</div>
+                    <div style={{ width:44, textAlign:"center", fontSize:12, color:C.textSec, flexShrink:0 }}>{sOBP(s)}</div>
+                    <div style={{ width:44, textAlign:"center", fontSize:12, color:C.textSec, flexShrink:0 }}>{sSLG(s)}</div>
+                    <div style={{ width:44, textAlign:"center", fontSize:13, fontWeight:700, color:C.brand, flexShrink:0 }}>{sOPS(s)}</div>
+                    <div style={{ width:44, textAlign:"center", fontSize:12, color:C.textSec, flexShrink:0 }}>{sWOBA(s)}</div>
+                  </>
+                ) : (
+                  <>
+                    {[s.pa, s.atBats, s.hits, s.h2, s.h3, s.hr, s.rbi, s.run, s.bb, s.so, s.sb, s.tb].map((v, vi) => (
+                      <div key={vi} style={{ width:CW, textAlign:"center", fontSize:11, flexShrink:0,
+                        color:[5,6,7,10].includes(vi)&&v>0 ? C.brand : C.textPri,
+                        fontWeight:[5,6,7,10].includes(vi)&&v>0 ? 700 : 400 }}>{v}</div>
+                    ))}
+                    <div style={{ width:RW, textAlign:"center", fontSize:11, color:s.risp_ab>0?C.brand:C.textTer, flexShrink:0 }}>{sRISP(s)}</div>
+                    <div style={{ width:RW, textAlign:"center", fontSize:11, color:C.textPri, flexShrink:0 }}>{sAvg(s)}</div>
+                    <div style={{ width:RW, textAlign:"center", fontSize:11, color:C.textSec, flexShrink:0 }}>{sOBP(s)}</div>
+                    <div style={{ width:RW, textAlign:"center", fontSize:11, color:C.textSec, flexShrink:0 }}>{sSLG(s)}</div>
+                    <div style={{ width:RW, textAlign:"center", fontSize:12, fontWeight:700, color:C.brand, flexShrink:0 }}>{sOPS(s)}</div>
+                    <div style={{ width:RW, textAlign:"center", fontSize:11, color:C.textSec, flexShrink:0 }}>{sISO(s)}</div>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -3729,35 +3822,34 @@ function SeasonStatsTab({ team }) {
                 </div>
               </div>
               {/* 通算サマリー */}
-              <div style={{ display:"flex", gap:12, marginTop:10 }}>
-                {[["打率",sAvg(selectedPlayer)],["出塁",sOBP(selectedPlayer)],["OPS",sOPS(selectedPlayer)],["本塁打",selectedPlayer.hr],["打点",selectedPlayer.rbi]].map(([l,v]) => (
-                  <div key={l} style={{ textAlign:"center" }}>
-                    <div style={{ fontSize:14, fontWeight:800, color: l==="OPS"?C.brand:C.textPri }}>{v}</div>
-                    <div style={{ fontSize:9, color:C.textTer }}>{l}</div>
+              <div style={{ display:"flex", gap:0, marginTop:10, justifyContent:"space-between" }}>
+                {[["打率",sAvg(selectedPlayer)],["出塁率",sOBP(selectedPlayer)],["長打率",sSLG(selectedPlayer)],["OPS",sOPS(selectedPlayer)],["HR",selectedPlayer.hr],["打点",selectedPlayer.rbi],["盗塁",selectedPlayer.sb]].map(([l,v]) => (
+                  <div key={l} style={{ textAlign:"center", flex:1 }}>
+                    <div style={{ fontSize:13, fontWeight:800, color:l==="OPS"?C.brand:C.textPri }}>{v}</div>
+                    <div style={{ fontSize:9, color:C.textTer, marginTop:1 }}>{l}</div>
                   </div>
                 ))}
               </div>
             </div>
             {/* 試合別成績リスト */}
             <div style={{ overflowY:"auto", flex:1 }}>
-              <div style={{ display:"flex", padding:"6px 16px", background:C.bg, fontSize:10, color:C.textTer, gap:0 }}>
-                <div style={{ width:44, flexShrink:0 }}>日付</div>
-                <div style={{ flex:1 }}>相手</div>
-                <div style={{ width:28, textAlign:"center", flexShrink:0 }}>打席</div>
-                <div style={{ width:28, textAlign:"center", flexShrink:0 }}>打数</div>
-                <div style={{ width:28, textAlign:"center", flexShrink:0 }}>安打</div>
-                <div style={{ width:28, textAlign:"center", flexShrink:0 }}>打点</div>
-                <div style={{ width:28, textAlign:"center", flexShrink:0 }}>HR</div>
+              {/* ヘッダー */}
+              <div style={{ display:"flex", alignItems:"center", padding:"6px 16px", background:C.bg, borderBottom:`1px solid ${C.divider}`, position:"sticky", top:0 }}>
+                <div style={{ width:42, fontSize:10, color:C.textTer, flexShrink:0 }}>日付</div>
+                <div style={{ flex:1, fontSize:10, color:C.textTer }}>相手</div>
+                {["PA","AB","H","2B","3B","HR","打点"].map(h => (
+                  <div key={h} style={{ width:28, textAlign:"center", fontSize:10, color:h==="HR"?C.brand:C.textTer, flexShrink:0 }}>{h}</div>
+                ))}
               </div>
               {playerGames.map((pg, i) => (
-                <div key={pg.game.id} style={{ display:"flex", alignItems:"center", padding:"11px 16px",
+                <div key={pg.game.id} style={{ display:"flex", alignItems:"center", padding:"10px 16px",
                   borderBottom:`1px solid ${C.divider}`, background: i%2===0?C.card:C.bg }}>
-                  <div style={{ width:44, fontSize:11, color:C.textTer, flexShrink:0 }}>{fmtDate(pg.game.game_date)}</div>
-                  <div style={{ flex:1, fontSize:13, fontWeight:600, color:C.textPri }}>vs {pg.game.opponent}</div>
-                  {[pg.pa, pg.atBats, pg.hits, pg.rbi, pg.hr].map((v, vi) => (
-                    <div key={vi} style={{ width:28, textAlign:"center", fontSize:13, flexShrink:0,
-                      color: vi===2&&v>0?C.brand : vi===4&&v>0?"#C45000":C.textPri,
-                      fontWeight: (vi===2&&v>0)||(vi===4&&v>0)?700:400 }}>{v}</div>
+                  <div style={{ width:42, fontSize:11, color:C.textTer, flexShrink:0 }}>{fmtDate(pg.game.game_date)}</div>
+                  <div style={{ flex:1, fontSize:13, fontWeight:600, color:C.textPri, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>vs {pg.game.opponent}</div>
+                  {[pg.pa, pg.atBats, pg.hits, pg.h2 ?? 0, pg.h3 ?? 0, pg.hr, pg.rbi].map((v, vi) => (
+                    <div key={vi} style={{ width:28, textAlign:"center", fontSize:12, flexShrink:0,
+                      color: vi===2&&v>0?C.brand : vi===5&&v>0?"#C45000" : C.textPri,
+                      fontWeight: (vi===2||vi===5)&&v>0 ? 700 : 400 }}>{v}</div>
                   ))}
                 </div>
               ))}
