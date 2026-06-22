@@ -2654,6 +2654,19 @@ function GameRecordScreen({ onBack, gameOrder, teamName, resumeData = null }) {
       doOut(nextRunners, undefined, false);
     } else if (action === "牽制セーフ") {
       addEvent(`${baseLabel}ランナー 牽制セーフ`); showToast("牽制セーフ");
+    } else if (action === "WP進塁" || action === "PB進塁") {
+      const runner = runners[base];
+      addEvent(`${baseLabel}ランナー #${runner?.number ?? "?"} ${action}`);
+      const nextRunners = { ...runners, [base]: null };
+      if (base === "first")       { nextRunners.second = runner; }
+      else if (base === "second") { nextRunners.third  = runner; }
+      else                        { addScore(1, runner?.number != null ? [runner.number] : []); }
+      setRunners(nextRunners);
+      setGameLog(log => log.map((h, hi) => hi !== currentHalfIdx ? h : {
+        ...h,
+        atBats: h.atBats.map((ab, ai) => ai !== currentAtBatIdx ? ab : { ...ab, runnersAfter: nextRunners })
+      }));
+      showToast(action);
     }
     goBack();
   };
@@ -3175,6 +3188,8 @@ function GameRecordScreen({ onBack, gameOrder, teamName, resumeData = null }) {
                   disabled={!!(nextBase(selectedBase) && runners[nextBase(selectedBase)])}
                   onClick={() => handleBaseAction("盗塁成功")}/>
                 <Btn label="盗塁死"    bg="#F5EAEA" border="#8B2020" color="#8B2020" onClick={() => handleBaseAction("盗塁死")}/>
+                <Btn label="WP進塁"    bg="#F1EFE8" border="#9B9A94" color="#3A3A38" onClick={() => handleBaseAction("WP進塁")}/>
+                <Btn label="PB進塁"    bg="#F1EFE8" border="#9B9A94" color="#3A3A38" onClick={() => handleBaseAction("PB進塁")}/>
                 <Btn label="牽制セーフ" bg="#F1EFE8" border="#9B9A94" color="#3A3A38" onClick={() => handleBaseAction("牽制セーフ")}/>
                 <Btn label="牽制アウト" bg="#F5EAEA" border="#8B2020" color="#8B2020" onClick={() => handleBaseAction("牽制アウト")}/>
               </div>
