@@ -24,7 +24,7 @@
   <script type="text/babel">
     const { useState, useRef, useEffect } = React;
 
-    const APP_VERSION = "v2026.06.22-1";
+    const APP_VERSION = "v2026.06.22-2";
 
     // Supabase接続
     const SUPABASE_URL = "https://zorxexynepvbaajblsfm.supabase.co";
@@ -685,7 +685,7 @@ function StatsView({ gameLog, teamNameA, teamNameB }) {
   );
 }
 
-const HIT_DIRECTIONS = ["-", "投", "捕", "一", "二", "三", "遊", "左", "左中", "中", "右中", "右"];
+const HIT_DIRECTIONS = ["-", "投", "捕", "一", "二", "三", "遊", "左", "中", "右"];
 const HIT_RESULTS_SAFE = ["ヒット", "二塁打", "三塁打", "本塁打", "エラー", "FC（野選）"];
 const HIT_RESULTS_OUT  = ["ゴロ", "フライ", "ライナー", "バント", "犠飛", "ファールフライ", "ファールライナー", "併殺打"];
 
@@ -2007,9 +2007,6 @@ function GameRecordScreen({ onBack, gameOrder, teamName, resumeData = null }) {
   const baseLineupB = batting === "後攻" ? myLineupRaw  : oppLineupRaw;
   const activeTeamA  = batting === "後攻" ? oppTeamNameRaw : myTeamNameRaw;
   const oppTeamName  = batting === "後攻" ? myTeamNameRaw  : oppTeamNameRaw;
-  // 表示・保存用: 常に自チームを参照
-  const myScore  = batting === "後攻" ? scoreB : scoreA;
-  const oppScore = batting === "後攻" ? scoreA : scoreB;
 
   const rd = resumeData;
   const [balls, setBalls] = useState(rd?.balls || 0);
@@ -2091,6 +2088,9 @@ function GameRecordScreen({ onBack, gameOrder, teamName, resumeData = null }) {
     gameLog.filter(h => h.topBottom === "裏").flatMap(h => h.atBats).reduce((s, ab) => s + (ab.runsScored || 0), 0),
     [gameLog]
   );
+  // 表示・保存用: 常に自チームを参照（scoreA/scoreB の後に定義）
+  const myScore  = batting === "後攻" ? scoreB : scoreA;
+  const oppScore = batting === "後攻" ? scoreA : scoreB;
 
   // 現在のハーフイニングと打席へのアクセサ
   const currentHalfIdx = gameLog.length - 1;
