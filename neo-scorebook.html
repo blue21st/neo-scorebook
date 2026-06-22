@@ -148,12 +148,12 @@ const C = {
   brandLight:  "#EBF2EB",
   brandText:   "#FFFFFF",
   textPri:     "#1A1A1A",
-  textSec:     "#888888",
+  textSec:     "#5A5A5A",
   textTer:     "#AAAAAA",
   divider:     "#F0F0F0",
   scoreBg:     "#2A4F2A",
   scoreText:   "#F0F8F0",
-  scoreSubText:"#8CB88C",
+  scoreSubText:"#B8D8B8",
   bsoB:        "#3D7A3D",
   bsoS:        "#8B6914",
   bsoO:        "#8B2020",
@@ -188,16 +188,54 @@ const PITCHER_A = { number: 18, name: "青柳 晃洋" };
 const PITCHER_B = { number: 17, name: "菅野 智之" };
 
 const BASE_NAMES = { 1: "1塁", 2: "2塁", 3: "3塁", 4: "ホーム（得点）" };
-const RUNNERS_INIT = { first: false, second: false, third: false };
+const LINEUP_SIZE   = 9;
+const OUTS_PER_HALF = 3;
+// 各塁は { name, number } | null。false は旧フォーマット（DB 保存済みデータ）のみ
+const RUNNERS_INIT = { first: null, second: null, third: null };
 const nextBase = (base) => base === "first" ? "second" : base === "second" ? "third" : null;
 
-const makeBat = (player, pitcherNumber = null, runnersAtStart = { first: false, second: false, third: false }) => ({
+// 旧フォーマット { first: bool } + 別オブジェクト → 新フォーマット { first: {name,number}|null } へ変換
+const migrateRunners = (r, names, nums) => {
+  if (!r) return { ...RUNNERS_INIT };
+  if (typeof r.first === 'boolean') {
+    const n = names || {}, u = nums || {};
+    return {
+      first:  r.first  ? { name: n.first  ?? null, number: u.first  ?? null } : null,
+      second: r.second ? { name: n.second ?? null, number: u.second ?? null } : null,
+      third:  r.third  ? { name: n.third  ?? null, number: u.third  ?? null } : null,
+    };
+  }
+  return { first: r.first ?? null, second: r.second ?? null, third: r.third ?? null };
+};
+
+const SUB_STEPS = {
+  TEAM: "team", TYPE: "type", OUT: "out", IN: "in",
+  POS: "pos", POSSWAP: "posswap", POSSWAP2: "posswap2", CONFIRM: "posswap_confirm",
+};
+
+const OUT_KEYWORDS     = ["ゴロ","フライ","ライナー","バント","アウト","三振","犠飛"];
+const NON_OUT_KEYWORDS = ["ヒット","安打","振り逃げ"];
+const isOutResult = (r) =>
+  OUT_KEYWORDS.some(x => r.includes(x)) && !NON_OUT_KEYWORDS.some(x => r.includes(x));
+const isStrikeout  = (r) => r.includes("三振") || r.includes("振り逃げ");
+
+const replayBSO = (pitches) => {
+  let b = 0, s = 0;
+  for (const p of pitches) {
+    if (p === "B") b++;
+    else if (p === "S" || p === "●" || p === "見逃" || p === "空振") s = Math.min(s + 1, 2);
+    else if (p === "F") s = Math.min(s + 1, 2);
+  }
+  return { balls: b, strikes: s };
+};
+
+const makeBat = (player, pitcherNumber = null, runnersAtStart = { ...RUNNERS_INIT }) => ({
   order: player.order, number: player.number,
   name: player.name, pos: player.pos,
   pitches: [], events: [], result: null,
-  runsScored: 0, scoreAfterA: null, scoreAfterB: null,
+  runsScored: 0, runsScoredBy: [], scoreAfterA: null, scoreAfterB: null,
   pitcherNumber, runnersAtStart,
-  runnersAfter: null, // 打席終了後のランナー状態
+  runnersAfter: null,
 });
 
 // ── Diamond ──
@@ -273,14 +311,15 @@ function MiniDiamond({ runners }) {
   );
 }
 
-function HistoryView({ gameLog }) {
+function HistoryView({ gameLog, teamNameA, teamNameB }) {
   const [expanded, setExpanded] = useState({});
   const toggle = (key) => setExpanded(e => ({ ...e, [key]: !e[key] }));
 
   const resultColor = (result) => {
     if (!result) return C.textTer;
-    if (["ヒット","二塁打","三塁打","本塁打","1塁打","2塁打","3塁打","ホームラン","エラー","野選","FC","フォアボール","デッドボール","振り逃げ","犠飛"].some(r => result.includes(r))) return C.brand;
-    if (["ゴロ","フライ","ライナー","バント","アウト","三振"].some(r => result.includes(r))) return "#8B2020";
+    if (result.includes("犠飛")) return C.textPri;
+    if (isOutResult(result)) return "#8B2020";
+    if (["ヒット","二塁打","三塁打","本塁打","1塁打","2塁打","3塁打","ホームラン","エラー","野選","FC","フォアボール","デッドボール","振り逃げ"].some(r => result.includes(r))) return C.brand;
     return C.textPri;
   };
 
@@ -297,7 +336,7 @@ function HistoryView({ gameLog }) {
           <div key={hi}>
             {/* イニングヘッダー */}
             <div style={{ padding:"8px 16px", background: C.scoreBg, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-              <span style={{ fontSize:12, fontWeight:700, color: C.scoreText }}>{half.inning}回 {half.topBottom === "表" ? "▲ 表" : "▼ 裏"}</span>
+              <span style={{ fontSize:12, fontWeight:700, color: C.scoreText }}>{half.inning}回{half.topBottom} {half.topBottom === "表" ? (teamNameA || "表") : (teamNameB || "裏")} 攻撃</span>
               {inningRuns > 0
                 ? <span style={{ fontSize:12, fontWeight:700, color:"#F0C040" }}>+{inningRuns}点</span>
                 : <span style={{ fontSize:11, color: C.scoreSubText }}>得点なし</span>
@@ -412,16 +451,19 @@ function StatsView({ gameLog, battersA, battersB, teamNameA, teamNameB }) {
         if (isBB) s.bb++;
         if (isIBB) s.ibb = (s.ibb||0) + 1;
         if (r.includes("デッドボール")) s.hbp++;
-        if (r.includes("三振")) s.so++;
+        if (isStrikeout(r)) s.so++;
         if (isSF)  s.sf  = (s.sf||0)  + 1;
         if (isSAC) s.sac = (s.sac||0) + 1;
 
-        // 塁打数（長打率計算用）
-        if (r.includes("ヒット") && !r.includes("二塁打") && !r.includes("三塁打")) s.tb = (s.tb||0) + 1;
-        if (r.includes("1塁打"))  s.tb = (s.tb||0) + 1;
-        if (r.includes("二塁打") || r.includes("2塁打")) s.tb = (s.tb||0) + 2;
-        if (r.includes("三塁打") || r.includes("3塁打")) s.tb = (s.tb||0) + 3;
-        if (r.includes("本塁打") || r.includes("ホームラン")) s.tb = (s.tb||0) + 4;
+        // 安打種別・塁打数
+        const isH2 = r.includes("二塁打") || r.includes("2塁打");
+        const isH3 = r.includes("三塁打") || r.includes("3塁打");
+        const isHR = r.includes("本塁打") || r.includes("ホームラン");
+        const isH1 = isHit && !isH2 && !isH3 && !isHR;
+        if (isH1) { s.h1 = (s.h1||0) + 1; s.tb = (s.tb||0) + 1; }
+        if (isH2) { s.h2 = (s.h2||0) + 1; s.tb = (s.tb||0) + 2; }
+        if (isH3) { s.h3 = (s.h3||0) + 1; s.tb = (s.tb||0) + 3; }
+        if (isHR) { s.tb = (s.tb||0) + 4; }
 
         // 得点圏打席・得点圏安打（runnersAtStartに2塁か3塁があれば得点圏）
         const rs = ab.runnersAtStart || {};
@@ -468,13 +510,15 @@ function StatsView({ gameLog, battersA, battersB, teamNameA, teamNameB }) {
         // 投球数
         ps.pitches += ab.pitches?.length || 0;
         // アウト（新表記：遊ゴロ・左フライ等、旧表記：ゴロアウト等、三振）
-        const isOutP = ["ゴロ","フライ","ライナー","バント","アウト","三振"].some(x => r.includes(x))
-          && !["ヒット","二塁打","三塁打","本塁打","1塁打","2塁打","3塁打","ホームラン","エラー","野選","FC","フォアボール","デッドボール","振り逃げ","犠飛"].some(x => r.includes(x));
-        if (isOutP) ps.outs++;
+        const isOutP = isOutResult(r);
+        if (isOutP) {
+          const extraOuts = r.includes("トリプルプレー") ? 2 : r.includes("ゲッツー") ? 1 : 0;
+          ps.outs += 1 + extraOuts;
+        }
         // 被安打（新旧両表記対応）
         if (["ヒット","二塁打","三塁打","本塁打","1塁打","2塁打","3塁打","ホームラン"].some(h => r.includes(h))) ps.pHits++;
         // 奪三振
-        if (r.includes("三振")) ps.strikeouts++;
+        if (isStrikeout(r)) ps.strikeouts++;
         // 与四球
         if (r.includes("フォアボール")) ps.walks++;
         // 与死球
@@ -494,8 +538,8 @@ function StatsView({ gameLog, battersA, battersB, teamNameA, teamNameB }) {
   const statsB = React.useMemo(() => calcStats(battersB, false), [gameLog, battersB]);
   const gameAvg  = (h, ab) => ab === 0 ? "-" : (h / ab).toFixed(3).replace("0.", ".");
   const gameOBP  = (b) => {
-    const denom = b.atBats + (b.bb||0) + (b.hbp||0) + (b.sf||0);
-    return denom === 0 ? "-" : ((b.hits + (b.bb||0) + (b.hbp||0)) / denom).toFixed(3).replace("0.", ".");
+    const denom = b.atBats + (b.bb||0) + (b.ibb||0) + (b.hbp||0) + (b.sf||0);
+    return denom === 0 ? "-" : ((b.hits + (b.bb||0) + (b.ibb||0) + (b.hbp||0)) / denom).toFixed(3).replace("0.", ".");
   };
   const gameSLG  = (b) => b.atBats === 0 ? "-" : ((b.tb||0) / b.atBats).toFixed(3).replace("0.", ".");
   const gameOPS  = (b) => {
@@ -640,19 +684,37 @@ const HIT_DIRECTIONS = ["-", "投", "捕", "一", "二", "三", "遊", "左", "�
 const HIT_RESULTS_SAFE = ["ヒット", "二塁打", "三塁打", "本塁打", "エラー", "FC（野選）"];
 const HIT_RESULTS_OUT  = ["ゴロ", "フライ", "ライナー", "バント", "犠飛", "ファールフライ", "ファールライナー", "併殺打"];
 
+// 結果ごとのデフォルト打者到達塁と選択可能な塁
+const defaultBatterBase = (result) =>
+  result === "ヒット" ? 1 : result === "二塁打" ? 2 : result === "三塁打" ? 3 : result === "本塁打" ? null : HIT_RESULTS_SAFE.includes(result) ? 1 : null;
+
+const batterBaseOptions = (result) => {
+  if (result === "ヒット")  return [1, 2, 3];
+  if (result === "二塁打") return [2, 3];
+  return null; // selector 不要
+};
+
 function InplayScreen({ batter, onResult }) {
   const [tab, setTab] = useState("inplay"); // inplay | special
   const [dir, setDir] = useState("-");
   const [result, setResult] = useState("-");
+  const [batterDest, setBatterDest] = useState(null); // null = デフォルト
+
+  const handleResultChange = (r) => {
+    setResult(r);
+    setBatterDest(null); // 結果を変えたらリセット
+  };
 
   const canConfirm = dir !== "-" && result !== "-";
+  const baseDef = defaultBatterBase(result);
+  const baseOpts = batterBaseOptions(result);
+  const effectiveBatterBase = batterDest ?? baseDef;
 
   const handleConfirm = () => {
     if (!canConfirm) return;
     const isSafe = HIT_RESULTS_SAFE.includes(result);
-    const batterBase = result === "ヒット" ? 1 : result === "二塁打" ? 2 : result === "三塁打" ? 3 : result === "本塁打" ? null : isSafe ? 1 : null;
     const dp = result === "併殺打";
-    onResult({ label: `${dir}${result}`, type: isSafe ? "safe" : "out", batterBase, dp });
+    onResult({ label: `${dir}${result}`, type: isSafe ? "safe" : "out", batterBase: effectiveBatterBase, dp });
   };
 
   const selectStyle = {
@@ -702,7 +764,7 @@ function InplayScreen({ batter, onResult }) {
           </div>
           <div>
             <div style={{ fontSize:11, color:C.textTer, fontWeight:600, marginBottom:6 }}>結果</div>
-            <select value={result} onChange={e => setResult(e.target.value)} style={selectStyle}>
+            <select value={result} onChange={e => handleResultChange(e.target.value)} style={selectStyle}>
               <option value="-">-- 結果 --</option>
               <optgroup label="出塁">
                 {HIT_RESULTS_SAFE.map(r => <option key={r} value={r}>{r}</option>)}
@@ -714,7 +776,7 @@ function InplayScreen({ batter, onResult }) {
           </div>
         </div>
 
-        <div style={{ margin:"0 14px 12px", padding:"10px 14px", borderRadius:8, background:C.bg, display:"flex", alignItems:"center", gap:8, minHeight:44 }}>
+        <div style={{ margin:"0 14px 8px", padding:"10px 14px", borderRadius:8, background:C.bg, display:"flex", alignItems:"center", gap:8, minHeight:44 }}>
           {canConfirm ? (
             <>
               <span style={{ fontSize:20, fontWeight:700, color:C.textPri }}>{dir}</span>
@@ -725,6 +787,30 @@ function InplayScreen({ batter, onResult }) {
             <span style={{ fontSize:12, color:C.textTer }}>方向と結果を選んでください</span>
           )}
         </div>
+
+        {/* 打者の到達塁セレクター（ヒット・二塁打のみ表示） */}
+        {canConfirm && baseOpts && (
+          <div style={{ margin:"0 14px 10px" }}>
+            <div style={{ fontSize:11, color:C.textTer, fontWeight:600, marginBottom:6 }}>打者の到達塁</div>
+            <div style={{ display:"flex", gap:8 }}>
+              {baseOpts.map(b => {
+                const active = effectiveBatterBase === b;
+                const label = b === 1 ? "1塁" : b === 2 ? "2塁" : "3塁";
+                return (
+                  <div key={b} onClick={() => setBatterDest(b)}
+                    style={{
+                      padding:"8px 18px", borderRadius:8, fontSize:13, fontWeight:700, cursor:"pointer",
+                      background: active ? C.brand : C.bg,
+                      color: active ? C.brandText : C.textSec,
+                      border:`2px solid ${active ? C.brand : C.divider}`,
+                    }}>
+                    {label}{b === baseDef ? "（標準）" : ""}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div style={{ padding:"0 14px 14px" }}>
           <div
@@ -1080,7 +1166,7 @@ const PAST_TEAMS = [
 ];
 
 const makeEmptyOrder = () =>
-  Array.from({ length: 9 }, (_, i) => ({ order: i + 1, playerId: null, pos: "-" }));
+  Array.from({ length: LINEUP_SIZE }, (_, i) => ({ order: i + 1, playerId: null, pos: "-" }));
 
 // ── ドラッグ可能なオーダー行 ──
 function OrderRow({ row, idx, players, stamenIds, onPlayerChange, onPosChange, onDragStart, onDragOver, onDrop, isLast }) {
@@ -1088,7 +1174,7 @@ function OrderRow({ row, idx, players, stamenIds, onPlayerChange, onPosChange, o
   const selectStyle = {
     border: "none", outline: "none", background: "transparent",
     fontSize: 13, color: C.textPri, fontFamily: "inherit",
-    cursor: "pointer", appearance: "none", WebkitAppearance: "none",
+    cursor: "pointer",
   };
 
   return (
@@ -1125,9 +1211,9 @@ function OrderRow({ row, idx, players, stamenIds, onPlayerChange, onPosChange, o
 }
 
 // ── 自チームタブ ──
-function MyTeamTab({ teamId, onLineupChange }) {
+function MyTeamTab({ teamId, onLineupChange, onBenchChange }) {
   const [lineup, setLineup] = useState(
-    Array.from({ length: 9 }, (_, i) => ({ order: i + 1, playerId: null, pos: "-" }))
+    Array.from({ length: LINEUP_SIZE }, (_, i) => ({ order: i + 1, playerId: null, pos: "-" }))
   );
   const [players, setPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1153,8 +1239,14 @@ function MyTeamTab({ teamId, onLineupChange }) {
     const notify = (nl) => {
       if (onLineupChange) onLineupChange(nl.map(r => ({ ...r, player: loadedPlayers.find(p => p.id === r.playerId) })));
     };
-    if (prev?.game_state?.lineup?.length > 0) {
-      setPrevOrder({ lineup: prev.game_state.lineup, date: prev.game_date });
+    if (prev?.game_state) {
+      const prevBatting = prev.game_state.batting || "先攻";
+      const myPrevLineup = prevBatting === "先攻"
+        ? (prev.game_state.lineup || [])
+        : (prev.game_state.oppLineup || []);
+      if (myPrevLineup.length > 0) {
+        setPrevOrder({ lineup: myPrevLineup, date: prev.game_date });
+      }
     }
     setLoading(false);
   };
@@ -1163,6 +1255,11 @@ function MyTeamTab({ teamId, onLineupChange }) {
 
   const stamenIds = lineup.map(l => l.playerId).filter(Boolean);
   const bench = players.filter(p => !stamenIds.includes(p.id));
+
+  // 控えリストを親に通知
+  React.useEffect(() => {
+    if (onBenchChange) onBenchChange(bench.map(p => ({ number: p.number, name: p.name, pos: "-" })));
+  }, [stamenIds.join(","), players.length]);
 
   const notifyLineup = (newLineup) => {
     if (onLineupChange) onLineupChange(newLineup.map(r => ({ ...r, player: players.find(p => p.id === r.playerId) })));
@@ -1179,16 +1276,15 @@ function MyTeamTab({ teamId, onLineupChange }) {
   const applyPrevOrder = () => {
     let newLineup;
     if (prevOrder) {
-      const playerIds = new Set(players.map(p => p.id));
       newLineup = prevOrder.lineup.map(r => ({
         order: r.order,
-        playerId: playerIds.has(r.playerId) ? r.playerId : null,
+        playerId: players.find(p => p.number === r.number)?.id ?? null,
         pos: r.pos || "-",
       }));
     } else {
       const defaultPos = ["投", "捕", "一", "二", "三", "遊", "左", "中", "右"];
       const sorted = [...players].sort((a, b) => a.number - b.number);
-      newLineup = Array.from({ length: 9 }, (_, i) => ({
+      newLineup = Array.from({ length: LINEUP_SIZE }, (_, i) => ({
         order: i + 1,
         playerId: sorted[i]?.id ?? null,
         pos: defaultPos[i] || "-",
@@ -1329,11 +1425,11 @@ function OpponentOrderRow({ row, idx, onNameChange, onNumberChange, onPosChange,
         placeholder="選手名"
         value={row.name}
         onChange={e => onNameChange(row.order, e.target.value)}
-        style={{ ...inputStyle, flex: 1, color: C.textPri, fontWeight: row.name ? 600 : 400 }}
+        style={{ ...inputStyle, flex: 1, minWidth: 0, color: C.textPri, fontWeight: row.name ? 600 : 400 }}
       />
-      <div style={{ width: 44, display: "flex", alignItems: "center", justifyContent: "center", background: C.brandLight, borderRadius: 8, padding: "4px 2px" }}>
+      <div style={{ width: 52, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: C.brandLight, borderRadius: 8, padding: "4px 4px" }}>
         <select value={row.pos} onChange={e => onPosChange(row.order, e.target.value)}
-          style={{ border: "none", outline: "none", background: "transparent", fontSize: 13, fontWeight: 700, color: C.brand, textAlign: "center", width: "100%", appearance: "none", WebkitAppearance: "none", cursor: "pointer", fontFamily: "inherit" }}>
+          style={{ border: "none", outline: "none", background: "transparent", fontSize: 13, fontWeight: 700, color: C.brand, width: "100%", cursor: "pointer", fontFamily: "inherit" }}>
           {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
       </div>
@@ -1342,12 +1438,13 @@ function OpponentOrderRow({ row, idx, onNameChange, onNumberChange, onPosChange,
 }
 
 // ── 相手チームタブ ──
-function OpponentTab({ onLineupChange, onTeamNameChange }) {
+function OpponentTab({ onLineupChange, onBenchChange, onTeamNameChange }) {
   const [step, setStep] = useState("select");
   const [teamName, setTeamName] = useState("");
   const [lineup, setLineup] = useState(
-    Array.from({ length: 9 }, (_, i) => ({ order: i + 1, number: "", name: "", pos: "-" }))
+    Array.from({ length: LINEUP_SIZE }, (_, i) => ({ order: i + 1, number: "", name: "", pos: "-" }))
   );
+  const [bench, setBench] = useState([]);
   const [pastTeams, setPastTeams] = useState([
     { name: "テストチーム", date: "2026-06-01", lineup: [
       { order:1, number:"1", name:"1番選手", pos:"中" },
@@ -1378,7 +1475,7 @@ function OpponentTab({ onLineupChange, onTeamNameChange }) {
         for (const g of data) {
           if (!g.game_state?.oppLineup?.length || seen.has(g.opponent)) continue;
           seen.add(g.opponent);
-          teams.push({ name: g.opponent, lineup: g.game_state.oppLineup, date: g.game_date });
+          teams.push({ name: g.opponent, lineup: g.game_state.oppLineup, bench: g.game_state.oppBench || [], date: g.game_date });
         }
         setPastTeams(teams);
       });
@@ -1386,6 +1483,23 @@ function OpponentTab({ onLineupChange, onTeamNameChange }) {
 
   const notify = (nl) => {
     if (onLineupChange) onLineupChange(nl.map(r => ({ ...r, number: parseInt(r.number) || 0, name: r.name.trim() })));
+  };
+
+  const notifyBench = (bl) => {
+    if (onBenchChange) onBenchChange(bl.map(r => ({ ...r, number: parseInt(r.number) || 0, name: r.name.trim() })));
+  };
+
+  const addBenchRow = () => {
+    const nb = [...bench, { id: Date.now(), number: "", name: "", pos: "-" }];
+    setBench(nb); notifyBench(nb);
+  };
+  const updateBench = (id, field, val) => {
+    const nb = bench.map(r => r.id === id ? { ...r, [field]: val } : r);
+    setBench(nb); notifyBench(nb);
+  };
+  const removeBench = (id) => {
+    const nb = bench.filter(r => r.id !== id);
+    setBench(nb); notifyBench(nb);
   };
 
   const goToOrder = (name, nl = lineup) => {
@@ -1398,8 +1512,13 @@ function OpponentTab({ onLineupChange, onTeamNameChange }) {
     const preLineup = team.lineup.map(r => ({
       order: r.order, number: r.number ? String(r.number) : "", name: r.name || "", pos: r.pos || "-",
     }));
+    const preBench = (team.bench || []).map((r, i) => ({
+      id: Date.now() + i, number: r.number ? String(r.number) : "", name: r.name || "", pos: r.pos || "-",
+    }));
     setTeamName(team.name);
     setLineup(preLineup);
+    setBench(preBench);
+    notifyBench(preBench);
     goToOrder(team.name, preLineup);
   };
 
@@ -1480,7 +1599,7 @@ function OpponentTab({ onLineupChange, onTeamNameChange }) {
         <div style={{ width: 24 }}/><div style={{ width: 20 }}/>
         <div style={{ width: 36, fontSize: 10, color: C.textTer, fontWeight: 600, textAlign: "center" }}>#</div>
         <div style={{ flex: 1, fontSize: 10, color: C.textTer, fontWeight: 600, marginLeft: 8 }}>選手名</div>
-        <div style={{ width: 44, fontSize: 10, color: C.textTer, fontWeight: 600, textAlign: "center" }}>位置</div>
+        <div style={{ width: 52, flexShrink: 0, fontSize: 10, color: C.textTer, fontWeight: 600, textAlign: "center" }}>守備位置</div>
       </div>
 
       <div style={{ background: C.card, borderRadius: 14, overflow: "hidden", boxShadow: C.cardShadow }}>
@@ -1494,6 +1613,40 @@ function OpponentTab({ onLineupChange, onTeamNameChange }) {
           />
         ))}
       </div>
+
+      {/* 控え */}
+      <div style={{ fontSize: 10, fontWeight: 700, color: C.textTer, letterSpacing: "0.08em", margin: "14px 0 8px" }}>控え選手</div>
+      {bench.length > 0 && (
+        <div style={{ background: C.card, borderRadius: 14, overflow: "hidden", boxShadow: C.cardShadow, marginBottom: 8 }}>
+          {bench.map((row, i) => {
+            const inputS = { border:"none", outline:"none", background:"transparent", fontSize:13, fontFamily:"inherit", padding:"2px 0", borderBottom:`1px solid ${C.divider}` };
+            return (
+              <div key={row.id} style={{ display:"flex", alignItems:"center", padding:"10px 12px", borderBottom: i < bench.length-1 ? `1px solid ${C.divider}` : "none", gap:8 }}>
+                <input inputMode="numeric" placeholder="#" value={row.number}
+                  onChange={e => updateBench(row.id, "number", e.target.value)}
+                  style={{ ...inputS, width:36, textAlign:"center", color:C.textSec }}/>
+                <input placeholder="選手名" value={row.name}
+                  onChange={e => updateBench(row.id, "name", e.target.value)}
+                  style={{ ...inputS, flex:1, minWidth:0, color:C.textPri }}/>
+                <div style={{ width:52, flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", background:C.brandLight, borderRadius:8, padding:"4px 4px" }}>
+                  <select value={row.pos} onChange={e => updateBench(row.id, "pos", e.target.value)}
+                    style={{ border:"none", outline:"none", background:"transparent", fontSize:13, fontWeight:700, color:C.brand, width:"100%", cursor:"pointer", fontFamily:"inherit" }}>
+                    {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+                <div onClick={() => removeBench(row.id)} style={{ flexShrink:0, cursor:"pointer", padding:"4px" }}>
+                  <X size={14} color={C.textTer}/>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <div onClick={addBenchRow}
+        style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 12px", cursor:"pointer", userSelect:"none" }}>
+        <Plus size={14} color={C.brand}/>
+        <span style={{ fontSize:12, fontWeight:600, color:C.brand }}>控えを追加</span>
+      </div>
     </div>
   );
 }
@@ -1502,9 +1655,15 @@ function OpponentTab({ onLineupChange, onTeamNameChange }) {
 function OrderRegistration({ onNext, onBack, teamId }) {
   const [tab, setTab] = useState("my");
   const [myLineup, setMyLineup] = useState([]);
+  const [myBench, setMyBench] = useState([]);
   const [oppLineup, setOppLineup] = useState([]);
+  const [oppBench, setOppBench] = useState([]);
   const [oppTeamName, setOppTeamName] = useState("");
   const [orderErrors, setOrderErrors] = useState([]);
+  const [gameDate, setGameDate] = useState(new Date().toISOString().split("T")[0]);
+  const [gameType, setGameType] = useState("公式戦");
+  const [tournament, setTournament] = useState("");
+  const [batting, setBatting] = useState("先攻");
 
   const handleNext = () => {
     const errors = [];
@@ -1533,7 +1692,7 @@ function OrderRegistration({ onNext, onBack, teamId }) {
     if (errors.length > 0) { setOrderErrors(errors); return; }
 
     setOrderErrors([]);
-    onNext({ myLineup, teamId, oppLineup, oppTeamName });
+    onNext({ myLineup, myBench, teamId, oppLineup, oppBench, oppTeamName, gameDate, gameType, tournament, batting });
   };
 
   return (
@@ -1553,7 +1712,7 @@ function OrderRegistration({ onNext, onBack, teamId }) {
               <span style={{ fontSize:13, color: C.textSec, fontWeight:500 }}>戻る</span>
             </div>
             <div>
-              <div style={{ fontSize: 10, color: C.textTer }}>{new Date().toLocaleDateString("ja-JP", { month: "long", day: "numeric" })}</div>
+              <div style={{ fontSize: 10, color: C.textTer }}>試合情報を入力して記録開始</div>
               <div style={{ fontSize: 18, fontWeight: 800, color: C.textPri }}>オーダー登録</div>
             </div>
           </div>
@@ -1565,6 +1724,37 @@ function OrderRegistration({ onNext, onBack, teamId }) {
             onPointerLeave={e => e.currentTarget.style.opacity = "1"}
           >
             <span style={{ fontSize: 13, fontWeight: 700, color: C.brandText }}>記録開始 →</span>
+          </div>
+        </div>
+
+        {/* 試合情報 */}
+        <div style={{ display: "flex", gap: 8, margin: "10px 0 4px", flexWrap: "wrap", alignItems: "center" }}>
+          <input
+            type="date" value={gameDate} onChange={e => setGameDate(e.target.value)}
+            style={{ fontSize: 13, padding: "6px 10px", borderRadius: 8, border: `1px solid ${C.divider}`, background: C.bg, color: C.textPri, flex: "0 0 auto" }}
+          />
+          <select value={gameType} onChange={e => setGameType(e.target.value)}
+            style={{ fontSize: 13, padding: "6px 10px", borderRadius: 8, border: `1px solid ${C.divider}`, background: C.bg, color: C.textPri, flex: "0 0 auto" }}>
+            <option value="公式戦">公式戦</option>
+            <option value="練習試合">練習試合</option>
+          </select>
+          {gameType === "公式戦" && (
+            <input
+              type="text" value={tournament} placeholder="大会名（任意）"
+              onChange={e => setTournament(e.target.value)}
+              style={{ fontSize: 13, padding: "6px 10px", borderRadius: 8, border: `1px solid ${C.divider}`, background: C.bg, color: C.textPri, flex: "1 1 120px", minWidth: 0 }}
+            />
+          )}
+          <div style={{ display:"flex", alignItems:"center", gap:6, background:C.bg, padding:"4px 10px 4px 6px", borderRadius:10, border:`1px solid ${C.divider}`, flexShrink:0 }}>
+            <span style={{ fontSize:11, color:C.textTer, whiteSpace:"nowrap" }}>自チーム</span>
+            {["先攻","後攻"].map(v => (
+              <div key={v} onClick={() => setBatting(v)}
+                style={{ fontSize:13, padding:"5px 11px", borderRadius:6, cursor:"pointer", fontWeight:700,
+                  background: batting===v ? C.brand : "transparent",
+                  color: batting===v ? C.brandText : C.textSec }}>
+                {v}
+              </div>
+            ))}
           </div>
         </div>
 
@@ -1593,7 +1783,178 @@ function OrderRegistration({ onNext, onBack, teamId }) {
 
       {/* コンテンツ */}
       <div style={{ padding: "16px 16px 32px" }}>
-        {tab === "my" ? <MyTeamTab teamId={teamId} onLineupChange={setMyLineup}/> : <OpponentTab onLineupChange={setOppLineup} onTeamNameChange={setOppTeamName}/>}
+        <div style={{ display: tab === "my" ? "block" : "none" }}>
+          <MyTeamTab teamId={teamId} onLineupChange={setMyLineup} onBenchChange={setMyBench}/>
+        </div>
+        <div style={{ display: tab === "opp" ? "block" : "none" }}>
+          <OpponentTab onLineupChange={setOppLineup} onBenchChange={setOppBench} onTeamNameChange={setOppTeamName}/>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────
+// 守備交代モーダル
+// ─────────────────────────────
+function SubstitutionModal({
+  activeBattersA, activeBattersB, benchA, benchB,
+  activeTeamA, oppTeamName,
+  subStep, setSubStep, subTeam, setSubTeam, subType, setSubType,
+  subOutSlot, setSubOutSlot, subInPlayer, setSubInPlayer,
+  subNewPos, setSubNewPos, subSwapSlot1, setSubSwapSlot1,
+  onClose, applyDefenseSub, applyPositionChange,
+}) {
+  const subLineup   = subTeam === "top" ? activeBattersA : activeBattersB;
+  const subBench    = subTeam === "top" ? benchA : benchB;
+  const subTeamName = subTeam === "top" ? activeTeamA : oppTeamName;
+  const POSITIONS   = ["投","捕","一","二","三","遊","左","中","右","DH","-"];
+  const playerRow = (p, i, onClick) => (
+    <div key={i} onClick={onClick}
+      style={{ display:"flex", alignItems:"center", padding:"14px 20px", borderBottom:`1px solid ${C.divider}`, cursor:"pointer" }}>
+      <div style={{ width:24, height:24, borderRadius:"50%", background:C.brandLight, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginRight:10 }}>
+        <span style={{ fontSize:11, fontWeight:800, color:C.brand }}>{p.order}</span>
+      </div>
+      <div style={{ width:28, fontSize:11, color:C.textTer }}>#{p.number}</div>
+      <div style={{ flex:1, fontSize:14, fontWeight:600, color:C.textPri }}>{p.name}</div>
+      <div style={{ fontSize:11, padding:"2px 8px", background:C.bg, borderRadius:6, color:C.textSec, border:`1px solid ${C.divider}` }}>{p.pos}</div>
+    </div>
+  );
+  const backBtn = (label, onClick) => (
+    <div onClick={onClick} style={{ padding:"12px 0", textAlign:"center", fontSize:13, color:C.textSec, cursor:"pointer" }}>← 戻る</div>
+  );
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:200, display:"flex", alignItems:"flex-end", justifyContent:"center" }}
+      onClick={onClose}>
+      <div onClick={e => e.stopPropagation()}
+        style={{ background:C.card, borderRadius:"20px 20px 0 0", width:"100%", maxWidth:480, maxHeight:"85vh", display:"flex", flexDirection:"column" }}>
+        <div style={{ padding:"16px 20px 12px", borderBottom:`1px solid ${C.divider}`, display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}>
+          <div>
+            <div style={{ fontSize:11, color:C.textSec, marginBottom:2 }}>
+              {subStep === SUB_STEPS.TEAM ? "選手交代" : subTeamName}
+            </div>
+            <div style={{ fontSize:15, fontWeight:800, color:C.textPri }}>
+              {subStep === SUB_STEPS.TEAM    && "どちらが交代しますか？"}
+              {subStep === SUB_STEPS.TYPE    && "種類を選んでください"}
+              {subStep === SUB_STEPS.OUT     && "退く選手"}
+              {subStep === SUB_STEPS.IN      && "入る選手（ベンチ）"}
+              {subStep === SUB_STEPS.POS     && `${subInPlayer?.name} のポジション`}
+              {subStep === SUB_STEPS.POSSWAP && "1人目を選んでください"}
+              {subStep === SUB_STEPS.POSSWAP2 && "2人目を選んでください"}
+              {subStep === SUB_STEPS.CONFIRM && "ポジションチェンジ確認"}
+            </div>
+          </div>
+          <div onClick={onClose}
+            style={{ width:28, height:28, borderRadius:"50%", background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer" }}>
+            <X size={16} color={C.textSec}/>
+          </div>
+        </div>
+        <div style={{ overflowY:"auto", flex:1, padding:"12px 0 40px" }}>
+          {subStep === SUB_STEPS.TEAM && (
+            <div style={{ padding:"0 16px", display:"flex", flexDirection:"column", gap:10 }}>
+              {[{ team:"top", label:activeTeamA }, { team:"bottom", label:oppTeamName }].map(({ team, label }) => (
+                <div key={team} onClick={() => { setSubTeam(team); setSubStep(SUB_STEPS.TYPE); }}
+                  style={{ padding:"18px 20px", borderRadius:14, background:C.bg, border:`2px solid ${C.divider}`, cursor:"pointer", fontSize:15, fontWeight:700, color:C.textPri }}>
+                  {label}
+                </div>
+              ))}
+            </div>
+          )}
+          {subStep === SUB_STEPS.TYPE && (
+            <div style={{ padding:"0 16px", display:"flex", flexDirection:"column", gap:10 }}>
+              {[
+                { type:"守備交代",        label:"守備交代・投手交代", desc:"ベンチの選手と入れ替える" },
+                { type:"ポジションチェンジ", label:"ポジションチェンジ", desc:"出場中の選手の守備位置を変える" },
+              ].map(({ type, label, desc }) => (
+                <div key={type} onClick={() => { setSubType(type); setSubStep(type === "ポジションチェンジ" ? SUB_STEPS.POSSWAP : SUB_STEPS.OUT); }}
+                  style={{ padding:"16px 20px", borderRadius:14, background:C.bg, border:`2px solid ${C.divider}`, cursor:"pointer" }}>
+                  <div style={{ fontSize:14, fontWeight:700, color:C.textPri }}>{label}</div>
+                  <div style={{ fontSize:12, color:C.textSec, marginTop:4 }}>{desc}</div>
+                </div>
+              ))}
+              {backBtn(null, () => setSubStep(SUB_STEPS.TEAM))}
+            </div>
+          )}
+          {subStep === SUB_STEPS.OUT && <>
+            {subLineup.map((p, i) => playerRow(p, i, () => { setSubOutSlot(i); setSubStep(SUB_STEPS.IN); }))}
+            {backBtn(null, () => setSubStep(SUB_STEPS.TYPE))}
+          </>}
+          {subStep === SUB_STEPS.IN && <>
+            {subBench.length === 0
+              ? <div style={{ padding:"40px 20px", textAlign:"center", color:C.textSec, fontSize:14 }}>ベンチに選手がいません</div>
+              : subBench.map((p, i) => (
+                  <div key={i} onClick={() => { setSubInPlayer(p); setSubNewPos(p.pos || "-"); setSubStep(SUB_STEPS.POS); }}
+                    style={{ display:"flex", alignItems:"center", padding:"14px 20px", borderBottom:`1px solid ${C.divider}`, cursor:"pointer" }}>
+                    <div style={{ width:28, fontSize:11, color:C.textTer }}>#{p.number}</div>
+                    <div style={{ flex:1, fontSize:14, fontWeight:600, color:C.textPri }}>{p.name}</div>
+                    <div style={{ fontSize:11, padding:"2px 8px", background:C.bg, borderRadius:6, color:C.textSec, border:`1px solid ${C.divider}` }}>{p.pos || "-"}</div>
+                  </div>
+                ))
+            }
+            {backBtn(null, () => setSubStep(SUB_STEPS.OUT))}
+          </>}
+          {subStep === SUB_STEPS.POS && (
+            <div style={{ padding:"0 16px" }}>
+              <div style={{ fontSize:13, color:C.textSec, marginBottom:14, paddingTop:4 }}>
+                {subLineup[subOutSlot]?.order}番 {subLineup[subOutSlot]?.name} → {subInPlayer?.name}
+              </div>
+              <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:24 }}>
+                {POSITIONS.map(pos => (
+                  <div key={pos} onClick={() => setSubNewPos(pos)}
+                    style={{ padding:"10px 16px", borderRadius:10, fontSize:14, fontWeight:700, cursor:"pointer",
+                      background: subNewPos === pos ? C.brand : C.bg,
+                      color: subNewPos === pos ? C.brandText : C.textPri,
+                      border:`2px solid ${subNewPos === pos ? C.brand : C.divider}` }}>
+                    {pos}
+                  </div>
+                ))}
+              </div>
+              <div onClick={subNewPos ? applyDefenseSub : undefined}
+                style={{ padding:"16px", borderRadius:50, textAlign:"center", fontWeight:700, fontSize:14,
+                  background: subNewPos ? C.brand : C.divider,
+                  color: C.brandText, cursor: subNewPos ? "pointer" : "default" }}>
+                交代を確定
+              </div>
+              {backBtn(null, () => setSubStep(SUB_STEPS.IN))}
+            </div>
+          )}
+          {subStep === SUB_STEPS.POSSWAP && <>
+            {subLineup.map((p, i) => playerRow(p, i, () => { setSubOutSlot(i); setSubStep(SUB_STEPS.POSSWAP2); }))}
+            {backBtn(null, () => setSubStep(SUB_STEPS.TYPE))}
+          </>}
+          {subStep === SUB_STEPS.POSSWAP2 && <>
+            {subLineup.map((p, i) => i === subOutSlot ? null :
+              playerRow(p, i, () => { setSubSwapSlot1(i); setSubStep(SUB_STEPS.CONFIRM); })
+            )}
+            {backBtn(null, () => setSubStep(SUB_STEPS.POSSWAP))}
+          </>}
+          {subStep === SUB_STEPS.CONFIRM && (() => {
+            const p1 = subLineup[subOutSlot];
+            const p2 = subLineup[subSwapSlot1];
+            return (
+              <div style={{ padding:"0 16px" }}>
+                <div style={{ background:C.bg, borderRadius:14, padding:"20px", marginBottom:20, display:"flex", alignItems:"center", gap:12 }}>
+                  <div style={{ flex:1, textAlign:"center" }}>
+                    <div style={{ fontSize:12, color:C.textSec }}>{p1?.order}番</div>
+                    <div style={{ fontSize:15, fontWeight:700, color:C.textPri }}>{p1?.name}</div>
+                    <div style={{ fontSize:13, fontWeight:700, color:C.brand, marginTop:6 }}>{p1?.pos} → {p2?.pos}</div>
+                  </div>
+                  <div style={{ fontSize:22, color:C.textTer }}>⇄</div>
+                  <div style={{ flex:1, textAlign:"center" }}>
+                    <div style={{ fontSize:12, color:C.textSec }}>{p2?.order}番</div>
+                    <div style={{ fontSize:15, fontWeight:700, color:C.textPri }}>{p2?.name}</div>
+                    <div style={{ fontSize:13, fontWeight:700, color:C.brand, marginTop:6 }}>{p2?.pos} → {p1?.pos}</div>
+                  </div>
+                </div>
+                <div onClick={applyPositionChange}
+                  style={{ padding:"16px", borderRadius:50, background:C.brand, color:C.brandText, fontWeight:700, fontSize:14, textAlign:"center", cursor:"pointer" }}>
+                  ポジションチェンジを確定
+                </div>
+                {backBtn(null, () => setSubStep(SUB_STEPS.POSSWAP2))}
+              </div>
+            );
+          })()}
+        </div>
       </div>
     </div>
   );
@@ -1602,38 +1963,45 @@ function OrderRegistration({ onNext, onBack, teamId }) {
 // ─────────────────────────────
 // 試合記録
 // ─────────────────────────────
-function GameRecordScreen({ onBack, gameOrder, teamName }) {
+function GameRecordScreen({ onBack, gameOrder, teamName, resumeData = null }) {
   const [activeView, setActiveView] = useState("record");
   const [screen, setScreen] = useState("main");
   const [history, setHistory] = useState([]);
 
-  // オーダーデータからactiveBattersAを構築
-  const activeBattersA = (gameOrder && gameOrder.myLineup && gameOrder.myLineup.length > 0)
-    ? gameOrder.myLineup
-        .filter(r => r.player)
-        .map(r => ({
-          order: r.order,
-          number: r.player.number,
-          name: r.player.name,
-          pos: r.pos || "-",
-        }))
-    : BATTERS_A;
-  const activeBattersB = (gameOrder?.oppLineup?.length > 0)
-    ? gameOrder.oppLineup
-    : BATTERS_B;
-  const oppTeamName = gameOrder?.oppTeamName || TEAM_B;
-  const activeTeamA = teamName || TEAM_A;
+  const gameMeta = {
+    gameDate:   gameOrder?.gameDate   || new Date().toISOString().split("T")[0],
+    gameType:   gameOrder?.gameType   || null,
+    tournament: gameOrder?.tournament || null,
+    season:     gameOrder?.gameDate   ? new Date(gameOrder.gameDate).getFullYear() : new Date().getFullYear(),
+  };
 
-  const [balls, setBalls] = useState(0);
-  const [strikes, setStrikes] = useState(0);
-  const [outs, setOuts] = useState(0);
-  const [inning, setInning] = useState(1);
-  const [isTop, setIsTop] = useState(true);
-  const [scoreA, setScoreA] = useState(0);
-  const [scoreB, setScoreB] = useState(0);
-  const [batterIdxA, setBatterIdxA] = useState(0);
-  const [batterIdxB, setBatterIdxB] = useState(-1);
-  const [runners, setRunners] = useState({ ...RUNNERS_INIT });
+  const batting = gameOrder?.batting ?? "先攻"; // 先攻=自チームが表で攻撃
+  const myLineupRaw  = (gameOrder?.myLineup?.length > 0)
+    ? gameOrder.myLineup.filter(r => r.player).map(r => ({ order:r.order, number:r.player.number, name:r.player.name, pos:r.pos||"-" }))
+    : BATTERS_A;
+  const oppLineupRaw = (gameOrder?.oppLineup?.length > 0) ? gameOrder.oppLineup : BATTERS_B;
+  const myTeamNameRaw = teamName || TEAM_A;
+  const oppTeamNameRaw = gameOrder?.oppTeamName || TEAM_B;
+  // 先攻=自チームが表(A)、後攻=相手が表(A)（試合開始時の基本ラインナップ）
+  const baseLineupA = batting === "後攻" ? oppLineupRaw : myLineupRaw;
+  const baseLineupB = batting === "後攻" ? myLineupRaw  : oppLineupRaw;
+  const activeTeamA  = batting === "後攻" ? oppTeamNameRaw : myTeamNameRaw;
+  const oppTeamName  = batting === "後攻" ? myTeamNameRaw  : oppTeamNameRaw;
+  // 表示・保存用: 常に自チームを参照
+  const myScore  = batting === "後攻" ? scoreB : scoreA;
+  const oppScore = batting === "後攻" ? scoreA : scoreB;
+
+  const rd = resumeData;
+  const [balls, setBalls] = useState(rd?.balls || 0);
+  const [strikes, setStrikes] = useState(rd?.strikes || 0);
+  const [outs, setOuts] = useState(rd?.outs || 0);
+  const [inning, setInning] = useState(rd?.inning || 1);
+  const [isTop, setIsTop] = useState(rd ? rd.isTop : true);
+  const [scoreA, setScoreA] = useState(rd?.scoreA || 0);
+  const [scoreB, setScoreB] = useState(rd?.scoreB || 0);
+  const [batterIdxA, setBatterIdxA] = useState(rd?.batterIdxA || 0);
+  const [batterIdxB, setBatterIdxB] = useState(rd?.batterIdxB ?? -1);
+  const [runners, setRunners] = useState(() => migrateRunners(rd?.runners, rd?.runnerNames, rd?.runnerNumbers));
   const [pitchCount, setPitchCount] = useState(0);
   const [stateHistory, setStateHistory] = useState([]); // スナップショット履歴
   const [toast, setToast] = useState(null);
@@ -1645,8 +2013,6 @@ function GameRecordScreen({ onBack, gameOrder, teamName }) {
   const [runnerQueue, setRunnerQueue] = useState([]);
   const [currentRunnerIdx, setCurrentRunnerIdx] = useState(0);
   const [newRunners, setNewRunners] = useState({ ...RUNNERS_INIT });
-  const [runnerNames, setRunnerNames] = useState({ first: null, second: null, third: null });
-  const [newRunnerNames, setNewRunnerNames] = useState({ first: null, second: null, third: null });
   const [pendingBatterBase, setPendingBatterBase] = useState(null);
   const [pendingIsOut, setPendingIsOut] = useState(false);
   const [pendingRunnerOuts, setPendingRunnerOuts] = useState(0);
@@ -1658,19 +2024,46 @@ function GameRecordScreen({ onBack, gameOrder, teamName }) {
   const [endType, setEndType] = useState(null);   // "completed" | "in_progress" | "cold"
   const [coldReason, setColdReason] = useState("");
   const [saving, setSaving] = useState(false);
+  const [savedGameId, setSavedGameId] = useState(rd?.gameId || null);
+  const [showOrderModal, setShowOrderModal] = useState(false);
+  const [showSubModal,   setShowSubModal]   = useState(false);
+  const [subStep,        setSubStep]        = useState(SUB_STEPS.TEAM);
+  const [subTeam,        setSubTeam]        = useState("top"); // "top"=先攻, "bottom"=後攻
+  const [subType,        setSubType]        = useState("守備交代");
+  const [subOutSlot,     setSubOutSlot]     = useState(null);
+  const [subInPlayer,    setSubInPlayer]    = useState(null);
+  const [subNewPos,      setSubNewPos]      = useState(null);
+  const [subSwapSlot1,   setSubSwapSlot1]   = useState(null);
+
+  // 選手交代
+  const [currentLineupA,  setCurrentLineupA]  = useState(rd?.currentLineupA  || null);
+  const [currentLineupB,  setCurrentLineupB]  = useState(rd?.currentLineupB  || null);
+  const startingLineupA = useRef([...baseLineupA]); // 試合開始時ラインナップ（意図的にイミュータブル）
+  const startingLineupB = useRef([...baseLineupB]);
+  const [substitutions,   setSubstitutions]   = useState(rd?.substitutions   || []);
+  const [runnerPitchers,  setRunnerPitchers]  = useState(rd?.runnerPitchers  || { first: null, second: null, third: null });
+
+  // 交代を反映した実効ラインナップ（null = 試合開始時の値をそのまま使用）
+  const activeBattersA = currentLineupA ?? baseLineupA;
+  const activeBattersB = currentLineupB ?? baseLineupB;
+  const benchA = (batting === "後攻" ? gameOrder?.oppBench : gameOrder?.myBench) || [];
+  const benchB = (batting === "後攻" ? gameOrder?.myBench  : gameOrder?.oppBench) || [];
 
   // ── gameLog：経過ビューと共有するデータ ──
   const pitcherB = activeBattersB.find(b => b.pos === "投") ?? activeBattersB[8] ?? PITCHER_B;
   const getPitcherNumber = (top) => top ? pitcherB.number : (activeBattersA.find(b => b.pos === "投")?.number ?? PITCHER_A.number);
 
+  const setRunnersAll = (combined) => setRunners(combined);
+  const clearRunners = () => setRunners({ ...RUNNERS_INIT });
+
   const initHalf = (inn, top, batters, idx) => ({
     inning: inn, topBottom: top ? "表" : "裏",
-    atBats: [{ ...makeBat(batters[idx % 9], getPitcherNumber(top), { first: false, second: false, third: false }) }],
+    atBats: [{ ...makeBat(batters[idx % LINEUP_SIZE], getPitcherNumber(top), { ...RUNNERS_INIT }) }],
   });
 
-  const [gameLog, setGameLog] = useState([
-    initHalf(1, true, activeBattersA, 0)
-  ]);
+  const [gameLog, setGameLog] = useState(() =>
+    rd?.gameLog?.length > 0 ? rd.gameLog : [initHalf(1, true, activeBattersA, 0)]
+  );
 
   // 現在のハーフイニングと打席へのアクセサ
   const currentHalfIdx = gameLog.length - 1;
@@ -1683,9 +2076,9 @@ function GameRecordScreen({ onBack, gameOrder, teamName }) {
   const setBatterIdx = isTop ? setBatterIdxA : setBatterIdxB;
   const pitcherA = activeBattersA.find(b => b.pos === "投") ?? PITCHER_A;
   const pitcher = isTop ? pitcherB : pitcherA;
-  const batter = batters[batterIdx % 9];
-  const next1 = batters[(batterIdx + 1) % 9];
-  const next2 = batters[(batterIdx + 2) % 9];
+  const batter = batters[batterIdx % LINEUP_SIZE];
+  const next1 = batters[(batterIdx + 1) % LINEUP_SIZE];
+  const next2 = batters[(batterIdx + 2) % LINEUP_SIZE];
 
   const showToast = (msg) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -1731,16 +2124,14 @@ function GameRecordScreen({ onBack, gameOrder, teamName }) {
     const top = newIsTop ?? isTop;
     const inn = newInning ?? inning;
     const bs = newBatters ?? batters;
-    const idx = newIdx ?? ((batterIdx + 1) % 9);
+    const idx = newIdx ?? ((batterIdx + 1) % LINEUP_SIZE);
     const player = bs[idx];
     const snap = runnersSnapshot ?? runners;
 
     setGameLog(log => {
-      // チェンジでハーフイニング追加
       if (newIsTop !== undefined) {
-        return [...log, initHalf(inn, top, bs, idx % 9)];
+        return [...log, initHalf(inn, top, bs, idx % LINEUP_SIZE)];
       }
-      // 同じハーフに打席追加
       return log.map((h, hi) => hi !== currentHalfIdx ? h : {
         ...h,
         atBats: [...h.atBats, { ...makeBat(player, getPitcherNumber(top), { ...snap }) }]
@@ -1748,8 +2139,9 @@ function GameRecordScreen({ onBack, gameOrder, teamName }) {
     });
   };
 
-  const addScore = (n) => {
+  const addScore = (n, scorerNumbers = []) => {
     if (n <= 0) return;
+    const nums = scorerNumbers.filter(x => x != null);
     if (isTop) {
       const nextA = scoreA + n;
       setScoreA(nextA);
@@ -1757,6 +2149,7 @@ function GameRecordScreen({ onBack, gameOrder, teamName }) {
         ...h,
         atBats: h.atBats.map((ab, ai) => ai !== currentAtBatIdx ? ab : {
           ...ab, runsScored: (ab.runsScored||0) + n,
+          runsScoredBy: [...(ab.runsScoredBy||[]), ...nums],
           scoreAfterA: nextA, scoreAfterB: scoreB,
         })
       }));
@@ -1767,6 +2160,7 @@ function GameRecordScreen({ onBack, gameOrder, teamName }) {
         ...h,
         atBats: h.atBats.map((ab, ai) => ai !== currentAtBatIdx ? ab : {
           ...ab, runsScored: (ab.runsScored||0) + n,
+          runsScoredBy: [...(ab.runsScoredBy||[]), ...nums],
           scoreAfterA: scoreA, scoreAfterB: nextB,
         })
       }));
@@ -1776,56 +2170,80 @@ function GameRecordScreen({ onBack, gameOrder, teamName }) {
   const resetAtBat = () => { setBalls(0); setStrikes(0); };
 
   const nextAtBat = (newIsTop, newInning, newBatters) => {
-    const newIdx = newIsTop !== undefined ? 0 : (batterIdx + 1) % 9;
+    const newIdx = newIsTop !== undefined ? 0 : (batterIdx + 1) % LINEUP_SIZE;
     setBatterIdx(newIsTop !== undefined ? (i => i) : (i => i + 1));
     resetAtBat();
     openNextAtBat(newIsTop, newInning, newBatters, newIdx);
   };
 
-  const doOut = (runnersState, outTotal = outs + 1) => {
+  // advanceBatter=true: 打者がアウト（三振・ゴロ等）→ 次打者へ進む
+  // advanceBatter=false: 走塁死・牽制アウト等、打者はアウトにならない → 現打者の打席継続
+  const doOut = (runnersState, outTotal = outs + 1, advanceBatter = true) => {
     const no = outTotal;
-    if (no >= 3) {
+    if (no >= OUTS_PER_HALF) {
       showToast("チェンジ！");
       setOuts(0);
-      setRunners({ ...RUNNERS_INIT });
+      clearRunners();
       const newTop = !isTop;
       const newInn = !isTop ? inning + 1 : inning;
       if (!isTop) setInning(i => i + 1);
       setIsTop(newTop);
       const newBatters = newTop ? activeBattersA : activeBattersB;
-      const newIdx = newTop ? (batterIdxA + 1) % 9 : (batterIdxB + 1) % 9;
+      const inc = advanceBatter ? 1 : 0;
+      const newIdx = newTop ? (batterIdxA + inc) % LINEUP_SIZE : (batterIdxB + inc) % LINEUP_SIZE;
       if (newTop) setBatterIdxA(newIdx); else setBatterIdxB(newIdx);
       setBalls(0); setStrikes(0);
-      setRunnerNames({ first: null, second: null, third: null });
       setGameLog(log => [...log, initHalf(newInn, newTop, newBatters, newIdx)]);
     } else {
       setOuts(no);
       if (runnersState) setRunners(runnersState);
-      setBatterIdx(i => i + 1);
-      resetAtBat();
-      openNextAtBat(undefined, undefined, undefined);
+      if (advanceBatter) {
+        setBatterIdx(i => i + 1);
+        resetAtBat();
+        openNextAtBat(undefined, undefined, undefined, undefined, runnersState ?? runners);
+      }
     }
+  };
+
+  // 選手を指定塁に配置し、前のランナーを詰める純粋関数。得点した選手番号を runsScored に返す
+  const placePlayerAt = (r, base, playerName, playerNumber) => {
+    const next = { first: r.first ?? null, second: r.second ?? null, third: r.third ?? null };
+    const runsScored = [];
+    if (base === 1) {
+      if (next.first) {
+        if (next.second) {
+          if (next.third) { runsScored.push(next.third.number); next.third = next.second; }
+          else { next.third = next.second; }
+        }
+        next.second = next.first;
+      }
+      next.first = { name: playerName, number: playerNumber };
+    } else if (base === 2) {
+      if (next.second) {
+        if (next.third) { runsScored.push(next.third.number); next.third = next.second; }
+        else { next.third = next.second; }
+      }
+      next.second = { name: playerName, number: playerNumber };
+    } else if (base === 3) {
+      if (next.third) runsScored.push(next.third.number);
+      next.third = { name: playerName, number: playerNumber };
+    }
+    return { runners: next, runsScored };
   };
 
   const advanceWalk = (currentRunners) => {
     const r = currentRunners ?? runners;
-    const next = { ...r };
-    const nextNames = { ...runnerNames };
-    if (next.first && next.second && next.third) { addScore(1); nextNames.third = nextNames.second; nextNames.second = nextNames.first; }
-    else if (next.first && next.second) { next.third = true; nextNames.third = nextNames.second; nextNames.second = nextNames.first; }
-    else if (next.first) { next.second = true; nextNames.second = nextNames.first; }
-    else next.first = true;
-    nextNames.first = batter.name;
+    const { runners: next, runsScored } = placePlayerAt(r, 1, batter.name, batter.number);
+    if (runsScored.length > 0) addScore(1, runsScored.filter(n => n != null));
     setRunners(next);
-    setRunnerNames(nextNames);
-    return next;
+    return { runners: next };
   };
 
-  const buildRunnerQueue = (r, names) => {
+  const buildRunnerQueue = (r) => {
     const q = [];
-    if (r.first)  q.push({ base:"first",  label:"1塁", baseNum:1, name: names?.first ?? null });
-    if (r.second) q.push({ base:"second", label:"2塁", baseNum:2, name: names?.second ?? null });
-    if (r.third)  q.push({ base:"third",  label:"3塁", baseNum:3, name: names?.third ?? null });
+    if (r.first)  q.push({ base:"first",  label:"1塁", baseNum:1, name: r.first.name,  number: r.first.number  });
+    if (r.second) q.push({ base:"second", label:"2塁", baseNum:2, name: r.second.name, number: r.second.number });
+    if (r.third)  q.push({ base:"third",  label:"3塁", baseNum:3, name: r.third.name,  number: r.third.number  });
     return q;
   };
 
@@ -1836,17 +2254,16 @@ function GameRecordScreen({ onBack, gameOrder, teamName }) {
       setScreen("main"); setHistory([]);
       return;
     }
-    const queue = buildRunnerQueue(runners, runnerNames);
+    const queue = buildRunnerQueue(runners);
     setPendingResult(result);
     setPendingBatterBase(batterBase);
     setPendingIsOut(isOut);
     setNewRunners({ ...RUNNERS_INIT });
-    setNewRunnerNames({ first: null, second: null, third: null });
     setPendingRunnerOuts(0);
     setCurrentRunnerIdx(0);
     setRunnerQueue(queue);
     if (queue.length === 0) {
-      finishAtBat(isOut, batterBase, { ...RUNNERS_INIT }, { first: null, second: null, third: null });
+      finishAtBat(isOut, batterBase, { ...RUNNERS_INIT });
       return;
     }
     if (isOut) { setScreen("askAdvance"); setHistory(h => [...h, "inplay"]); }
@@ -1860,9 +2277,12 @@ function GameRecordScreen({ onBack, gameOrder, teamName }) {
     if (result.special === "振")  { handlePitch("振");  return; } // 画面遷移はhandleWildStrike内で処理
     if (result.label.includes("本塁打") || result.label.includes("ホームラン")) {
       const sc = (runners.first?1:0)+(runners.second?1:0)+(runners.third?1:0)+1;
-      closeCurrentAtBat(result.label, { ...RUNNERS_INIT }); // runnersAfter = 全員生還でリセット
-      addScore(sc);
-      setRunners({ ...RUNNERS_INIT });
+      const hrNums = [
+        runners.third?.number, runners.second?.number, runners.first?.number, batter.number,
+      ].filter(x => x != null);
+      closeCurrentAtBat(result.label, { ...RUNNERS_INIT });
+      addScore(sc, hrNums);
+      clearRunners();
       showToast("ホームラン！");
       setBatterIdx(i => i + 1); resetAtBat();
       openNextAtBat(undefined, undefined, undefined, undefined, { ...RUNNERS_INIT });
@@ -1871,11 +2291,11 @@ function GameRecordScreen({ onBack, gameOrder, teamName }) {
     closeCurrentAtBat(result.label);
     if (result.dp) {
       // 併殺打：askAdvance をスキップして直接ランナー進塁確認へ
-      const queue = buildRunnerQueue(runners, runnerNames);
+      const queue = buildRunnerQueue(runners);
       setPendingResult(result); setPendingBatterBase(null); setPendingIsOut(true);
-      setNewRunners({ ...RUNNERS_INIT }); setNewRunnerNames({ first: null, second: null, third: null });
+      setNewRunners({ ...RUNNERS_INIT });
       setPendingRunnerOuts(0); setCurrentRunnerIdx(0); setRunnerQueue(queue);
-      if (queue.length === 0) { finishAtBat(true, null, { ...RUNNERS_INIT }, { first: null, second: null, third: null }, 0); }
+      if (queue.length === 0) { finishAtBat(true, null, { ...RUNNERS_INIT }, { first: null, second: null, third: null }, 0, {}); }
       else { setScreen("runnerAdvance"); setHistory(h => [...h, "inplay"]); }
       return;
     }
@@ -1884,38 +2304,35 @@ function GameRecordScreen({ onBack, gameOrder, teamName }) {
   };
 
   const handleAskAdvance = (yes) => {
-    if (!yes) { finishAtBat(true, null, runners, runnerNames); setScreen("main"); setHistory([]); }
+    if (!yes) { finishAtBat(true, null, runners, 0); setScreen("main"); setHistory([]); }
     else setScreen("runnerAdvance");
   };
 
   const handleRunnerAdvance = (toBase) => {
     let score = 0;
     const next = { ...newRunners };
-    const nextNames = { ...newRunnerNames };
-    const { name: runnerName } = runnerQueue[currentRunnerIdx];
+    const { name: runnerName, number: runnerNumber } = runnerQueue[currentRunnerIdx];
     const runnerOut = toBase === "out" ? 1 : 0;
     if (toBase === 4) { score = 1; }
     else if (toBase !== "out") {
-      if (toBase === 1) { next.first = true; nextNames.first = runnerName; }
-      if (toBase === 2) { next.second = true; nextNames.second = runnerName; }
-      if (toBase === 3) { next.third = true; nextNames.third = runnerName; }
+      if (toBase === 1) { next.first  = { name: runnerName, number: runnerNumber }; }
+      if (toBase === 2) { next.second = { name: runnerName, number: runnerNumber }; }
+      if (toBase === 3) { next.third  = { name: runnerName, number: runnerNumber }; }
     }
-    addScore(score);
+    addScore(score, toBase === 4 && runnerNumber != null ? [runnerNumber] : []);
     const nextIdx = currentRunnerIdx + 1;
     const nextRunnerOuts = pendingRunnerOuts + runnerOut;
     if (nextIdx >= runnerQueue.length) {
-      finishAtBat(pendingIsOut, pendingBatterBase, next, nextNames, nextRunnerOuts);
+      finishAtBat(pendingIsOut, pendingBatterBase, next, nextRunnerOuts);
       setScreen("main"); setHistory([]);
     } else {
       setNewRunners(next);
-      setNewRunnerNames(nextNames);
       setPendingRunnerOuts(nextRunnerOuts);
       setCurrentRunnerIdx(nextIdx);
     }
   };
 
-  const finishAtBat = (isOut, batterBase, finalRunners, finalRunnerNames, runnerOutCount = 0) => {
-    const fNames = finalRunnerNames ?? { first: null, second: null, third: null };
+  const finishAtBat = (isOut, batterBase, finalRunners, runnerOutCount = 0) => {
     if (isOut) {
       const totalOuts = outs + 1 + runnerOutCount;
       const dpLabel = runnerOutCount >= 2 ? "トリプルプレー！" : runnerOutCount === 1 ? "ゲッツー！" : (pendingResult?.label ?? "アウト");
@@ -1924,28 +2341,19 @@ function GameRecordScreen({ onBack, gameOrder, teamName }) {
         ...h,
         atBats: h.atBats.map((ab, ai) => ai !== currentAtBatIdx ? ab : { ...ab, runnersAfter: finalRunners })
       }));
-      setRunnerNames(fNames);
+      setRunners(finalRunners);
       doOut(finalRunners, totalOuts);
     } else {
-      const next = { ...finalRunners };
-      const nextNames = { ...fNames };
-      if (batterBase === 1) {
-        if (next.first) { if (next.second) { if (next.third) { addScore(1); } else { next.third = true; nextNames.third = nextNames.second; } } next.second = true; nextNames.second = nextNames.first; }
-        next.first = true; nextNames.first = batter.name;
-      } else if (batterBase === 2) {
-        if (next.second) { if (next.third) { addScore(1); } else { next.third = true; nextNames.third = nextNames.second; } }
-        next.second = true; nextNames.second = batter.name;
-      } else if (batterBase === 3) {
-        if (next.third) addScore(1);
-        next.third = true; nextNames.third = batter.name;
-      }
+      const { runners: next, runsScored } = batterBase
+        ? placePlayerAt(finalRunners, batterBase, batter.name, batter.number)
+        : { runners: finalRunners, runsScored: [] };
+      if (runsScored.length > 0) addScore(runsScored.length, runsScored.filter(n => n != null));
       showToast(pendingResult?.label ?? "出塁");
       setGameLog(log => log.map((h, hi) => hi !== currentHalfIdx ? h : {
         ...h,
         atBats: h.atBats.map((ab, ai) => ai !== currentAtBatIdx ? ab : { ...ab, runnersAfter: next })
       }));
       setRunners(next);
-      setRunnerNames(nextNames);
       setBatterIdx(i => i + 1); resetAtBat();
       openNextAtBat(undefined, undefined, undefined, undefined, next);
     }
@@ -1954,29 +2362,89 @@ function GameRecordScreen({ onBack, gameOrder, teamName }) {
   };
 
   const handleWildStrike = () => {
-    const queue = buildRunnerQueue(runners, runnerNames);
+    // 振り逃げ不成立: 1塁にランナーがいて2アウト未満
+    if (runners.first && outs < 2) {
+      closeCurrentAtBat("三振（KS）", runners);
+      showToast("三振（KS）");
+      doOut(runners);
+      setScreen("main"); setHistory([]);
+      return;
+    }
+    const queue = buildRunnerQueue(runners);
     setPendingResult({ label:"振り逃げ", type:"safe" });
     setPendingBatterBase(1); setPendingIsOut(false);
-    setNewRunners({ ...RUNNERS_INIT }); setNewRunnerNames({ first: null, second: null, third: null }); setCurrentRunnerIdx(0); setRunnerQueue(queue);
+    setNewRunners({ ...RUNNERS_INIT }); setCurrentRunnerIdx(0); setRunnerQueue(queue);
     if (queue.length === 0) {
-      const nextRunners = advanceWalk(runners);
-      closeCurrentAtBat("振り逃げ", nextRunners);
-      showToast("振り逃げ");
-      setBatterIdx(i => i + 1); resetAtBat(); openNextAtBat(undefined, undefined, undefined, undefined, nextRunners);
-      setScreen("main"); setHistory([]); // どの画面から呼ばれてもmainに戻る
+      handleWalk("振り逃げ");
+      setScreen("main"); setHistory([]);
     } else {
       closeCurrentAtBat("振り逃げ");
       setScreen("runnerAdvance"); setHistory(["main"]); // 絶対指定でhistoryをリセット
     }
   };
 
-  // スナップショットを保存
+  const openSubModal = () => {
+    setSubStep(SUB_STEPS.TEAM); setSubTeam("top"); setSubType("守備交代");
+    setSubOutSlot(null); setSubInPlayer(null); setSubNewPos(null); setSubSwapSlot1(null);
+    setShowSubModal(true);
+  };
+
+  const applyDefenseSub = () => {
+    saveSnapshot();
+    const isA = subTeam === "top";
+    const currentLineup = isA ? activeBattersA : activeBattersB;
+    const outPlayer = currentLineup[subOutSlot];
+    const newPos = subNewPos || subInPlayer.pos || "-";
+    const newLineup = currentLineup.map((p, i) =>
+      i === subOutSlot ? { ...p, number: subInPlayer.number, name: subInPlayer.name, pos: newPos } : p
+    );
+    if (isA) setCurrentLineupA(newLineup); else setCurrentLineupB(newLineup);
+    setSubstitutions(s => [...s, {
+      inning, isTop, slot: subOutSlot,
+      type: newPos === "投" ? "投手交代" : "守備交代",
+      outs, balls, strikes,
+      outNumber: outPlayer.number, outName: outPlayer.name,
+      inNumber: subInPlayer.number, inName: subInPlayer.name,
+      runnersSnapshot: { ...runners },
+    }]);
+    showToast(`${subInPlayer.name}が出場`);
+    setShowSubModal(false);
+  };
+
+  const applyPositionChange = () => {
+    saveSnapshot();
+    const isA = subTeam === "top";
+    const currentLineup = isA ? activeBattersA : activeBattersB;
+    const p1 = currentLineup[subOutSlot];
+    const p2 = currentLineup[subSwapSlot1];
+    const newLineup = currentLineup.map((p, i) => {
+      if (i === subOutSlot)   return { ...p, pos: p2.pos };
+      if (i === subSwapSlot1) return { ...p, pos: p1.pos };
+      return p;
+    });
+    if (isA) setCurrentLineupA(newLineup); else setCurrentLineupB(newLineup);
+    setSubstitutions(s => [...s, {
+      inning, isTop, slot: null, type: "ポジションチェンジ",
+      outs, balls, strikes,
+      slot1: subOutSlot, slot2: subSwapSlot1,
+      outNumber: p1.number, outName: p1.name,
+      inNumber:  p2.number, inName:  p2.name,
+      runnersSnapshot: null,
+    }]);
+    showToast("ポジションチェンジ");
+    setShowSubModal(false);
+  };
+
   const saveSnapshot = () => {
     setStateHistory(h => [...h, {
       balls, strikes, outs, inning, isTop,
       scoreA, scoreB, batterIdxA, batterIdxB,
-      runners: { ...runners }, runnerNames: { ...runnerNames }, pitchCount,
+      runners: { ...runners }, pitchCount,
       gameLog: JSON.parse(JSON.stringify(gameLog)),
+      currentLineupA: currentLineupA ? [...currentLineupA] : null,
+      currentLineupB: currentLineupB ? [...currentLineupB] : null,
+      substitutions: [...substitutions],
+      runnerPitchers: { ...runnerPitchers },
     }]);
   };
 
@@ -1985,23 +2453,39 @@ function GameRecordScreen({ onBack, gameOrder, teamName }) {
     setSaving(true);
     try {
       const payload = {
-        team_name: activeTeamA,
+        team_name: myTeamNameRaw,
         opponent: oppTeamName,
-        game_date: new Date().toISOString().split("T")[0],
+        game_date: gameMeta.gameDate,
+        season:    gameMeta.season,
+        game_type: gameMeta.gameType,
+        tournament: gameMeta.tournament || null,
         status,
-        score_my: scoreA,
-        score_opp: scoreB,
+        score_my: myScore,
+        score_opp: oppScore,
         end_inning: opts.endInning ?? inning,
         end_reason: opts.reason || null,
         game_log: gameLog,
         game_state: status === "in_progress" ? {
           inning, isTop, balls, strikes, outs,
           runners, batterIdxA, batterIdxB, pitchCount,
-          lineup: activeBattersA,
-          oppTeamName, oppLineup: activeBattersB,
-        } : { lineup: activeBattersA, oppTeamName, oppLineup: activeBattersB },
+          batting, lineup: activeBattersA,
+          oppTeamName, oppLineup: activeBattersB, oppBench: gameOrder?.oppBench || [],
+          currentLineupA, currentLineupB, substitutions, runnerPitchers,
+          startingLineupA: startingLineupA.current, startingLineupB: startingLineupB.current,
+        } : {
+          batting, lineup: activeBattersA, oppTeamName, oppLineup: activeBattersB, oppBench: gameOrder?.oppBench || [],
+          currentLineupA, currentLineupB, substitutions, runnerPitchers,
+          startingLineupA: startingLineupA.current, startingLineupB: startingLineupB.current,
+        },
       };
-      const { error } = await supabase.from("nsb_games").insert(payload);
+      let error;
+      if (savedGameId) {
+        ({ error } = await supabase.from("nsb_games").update(payload).eq("id", savedGameId));
+      } else {
+        const { data, error: insertError } = await supabase.from("nsb_games").insert(payload).select("id").single();
+        error = insertError;
+        if (!insertError && data?.id) setSavedGameId(data.id);
+      }
       if (error) throw error;
       setEndStep("success");
     } catch (e) {
@@ -2011,9 +2495,88 @@ function GameRecordScreen({ onBack, gameOrder, teamName }) {
     }
   };
 
+  const isEditMode = !!resumeData?.editMode;
+
+  const stepBackInEditMode = () => {
+    const newLog = JSON.parse(JSON.stringify(gameLog));
+    // 結果のない空打席があれば除去
+    let lastHalf = newLog[newLog.length - 1];
+    const lastAb = lastHalf.atBats[lastHalf.atBats.length - 1];
+    if (!lastAb.result && lastAb.pitches.length === 0) {
+      lastHalf.atBats.pop();
+      if (lastHalf.atBats.length === 0) {
+        newLog.pop();
+        if (newLog.length === 0) { showToast("これ以上戻れません"); return; }
+        lastHalf = newLog[newLog.length - 1];
+      }
+    }
+    const targetHalfIdx = newLog.length - 1;
+    const targetAbIdx   = lastHalf.atBats.length - 1;
+    const targetAb      = lastHalf.atBats[targetAbIdx];
+    if (!targetAb?.result) { showToast("これ以上戻れません"); return; }
+
+    // targetAb の前のスコアを算出
+    let newScoreA = 0, newScoreB = 0;
+    for (let hi = 0; hi < newLog.length; hi++) {
+      const endAi = hi === targetHalfIdx ? targetAbIdx : newLog[hi].atBats.length;
+      for (let ai = 0; ai < endAi; ai++) {
+        const ab = newLog[hi].atBats[ai];
+        if (ab.scoreAfterA != null) newScoreA = ab.scoreAfterA;
+        if (ab.scoreAfterB != null) newScoreB = ab.scoreAfterB;
+      }
+    }
+    // 同イニング内のアウト数（targetAb より前）
+    let newOuts = 0;
+    for (let ai = 0; ai < targetAbIdx; ai++) {
+      const r = lastHalf.atBats[ai].result || "";
+      if (isOutResult(r)) newOuts += r.includes("ゲッツー") ? 2 : 1;
+    }
+    // targetAb の開始時点のランナー状態を復元（旧フォーマット対応）
+    // resultだけ消してpitchesは残す（1球単位で戻れるように）
+    const keptPitches = targetAb.pitches || [];
+    targetAb.result = null; targetAb.events = [];
+    targetAb.runsScored = 0; targetAb.runsScoredBy = [];
+    targetAb.scoreAfterA = null; targetAb.scoreAfterB = null;
+
+    // 残ったpitchesからBSOを再計算
+    const bso = replayBSO(keptPitches);
+
+    const isTop = lastHalf.topBottom === "表";
+    const lineup = isTop ? activeBattersA : activeBattersB;
+    const abIdx  = lineup.findIndex(b => b.number === targetAb.number);
+
+    setGameLog(newLog);
+    setInning(lastHalf.inning);
+    setIsTop(isTop);
+    setScoreA(newScoreA); setScoreB(newScoreB);
+    setOuts(newOuts);
+    setRunners(migrateRunners(targetAb.runnersAtStart, targetAb.runnerNamesAtStart, targetAb.runnerNumbersAtStart));
+    setBalls(bso.balls); setStrikes(bso.strikes);
+    if (isTop) setBatterIdxA(abIdx !== -1 ? abIdx : 0);
+    else       setBatterIdxB(abIdx !== -1 ? abIdx : 0);
+    setStateHistory([]);
+    setScreen("main"); setHistory([]);
+    showToast("1打席戻しました");
+  };
+
   // 1球取消（スナップショット巻き戻し）
   const handleUndo = () => {
-    if (stateHistory.length === 0) return;
+    if (stateHistory.length === 0) {
+      if (isEditMode) {
+        const pitches = currentAtBat?.pitches || [];
+        if (pitches.length > 0) {
+          // 現打席のpitches末尾を1個削除してBSO再計算
+          updateCurrentPitches(p => p.slice(0, -1));
+          const bso = replayBSO(pitches.slice(0, -1));
+          setBalls(bso.balls);
+          setStrikes(bso.strikes);
+          showToast("1球取消しました");
+        } else {
+          stepBackInEditMode();
+        }
+      }
+      return;
+    }
     const prev = stateHistory[stateHistory.length - 1];
     setBalls(prev.balls);
     setStrikes(prev.strikes);
@@ -2024,10 +2587,13 @@ function GameRecordScreen({ onBack, gameOrder, teamName }) {
     setScoreB(prev.scoreB);
     setBatterIdxA(prev.batterIdxA);
     setBatterIdxB(prev.batterIdxB);
-    setRunners(prev.runners);
-    if (prev.runnerNames) setRunnerNames(prev.runnerNames);
+    setRunners(prev.runners ?? { ...RUNNERS_INIT });
     setPitchCount(prev.pitchCount);
     setGameLog(prev.gameLog);
+    setCurrentLineupA(prev.currentLineupA ?? null);
+    setCurrentLineupB(prev.currentLineupB ?? null);
+    setSubstitutions(prev.substitutions ?? []);
+    setRunnerPitchers(prev.runnerPitchers ?? { first: null, second: null, third: null });
     setStateHistory(h => h.slice(0, -1));
     setScreen("main");
     setHistory([]);
@@ -2040,12 +2606,7 @@ function GameRecordScreen({ onBack, gameOrder, teamName }) {
     updateCurrentPitches(p => [...p, type]);
     if (type === "B") {
       const nb = balls + 1;
-      if (nb >= 4) {
-        const nextRunners = advanceWalk(runners);
-        closeCurrentAtBat("フォアボール", nextRunners);
-        showToast("フォアボール");
-        setBatterIdx(i => i + 1); resetAtBat(); openNextAtBat(undefined, undefined, undefined, undefined, nextRunners);
-      } else setBalls(nb);
+      if (nb >= 4) { handleWalk("フォアボール"); } else setBalls(nb);
     } else if (type === "見逃" || type === "空振") {
       const ns = strikes + 1;
       if (ns >= 3) {
@@ -2061,17 +2622,17 @@ function GameRecordScreen({ onBack, gameOrder, teamName }) {
     } else if (type === "IP") {
       saveSnapshot(); // インプレー画面に入る前に保存
       goTo("inplay");
-    } else if (type === "DB") {
-      const nextRunners = advanceWalk(runners);
-      closeCurrentAtBat("デッドボール", nextRunners);
-      showToast("デッドボール");
-      setBatterIdx(i => i + 1); resetAtBat(); openNextAtBat(undefined, undefined, undefined, undefined, nextRunners);
-    } else if (type === "IBB") {
-      const nextRunners = advanceWalk(runners);
-      closeCurrentAtBat("故意四球", nextRunners);
-      showToast("故意四球");
-      setBatterIdx(i => i + 1); resetAtBat(); openNextAtBat(undefined, undefined, undefined, undefined, nextRunners);
+    } else if (type === "DB")  { handleWalk("デッドボール");
+    } else if (type === "IBB") { handleWalk("故意四球");
     }
+  };
+
+  const handleWalk = (label) => {
+    const { runners: next } = advanceWalk(runners);
+    closeCurrentAtBat(label, next);
+    showToast(label);
+    setBatterIdx(i => i + 1); resetAtBat();
+    openNextAtBat(undefined, undefined, undefined, undefined, next);
   };
 
   const handleBaseClick = (base) => { setSelectedBase(base); goTo("baseAction"); };
@@ -2084,17 +2645,12 @@ function GameRecordScreen({ onBack, gameOrder, teamName }) {
     const baseLabel = base === "first" ? "1塁" : base === "second" ? "2塁" : "3塁";
     if (action === "盗塁成功") {
       addEvent(`${baseLabel}ランナー 盗塁成功`);
-      const nextRunners = { ...runners, [base]: false };
-      if (base === "first") nextRunners.second = true;
-      else if (base === "second") nextRunners.third = true;
-      else addScore(1);
+      const stolen = runners[base];
+      const nextRunners = { ...runners, [base]: null };
+      if (base === "first")       { nextRunners.second = stolen; }
+      else if (base === "second") { nextRunners.third  = stolen; }
+      else                        { addScore(1, stolen?.number != null ? [stolen.number] : []); }
       setRunners(nextRunners);
-      setRunnerNames(n => {
-        const nn = { ...n, [base]: null };
-        if (base === "first") nn.second = n.first;
-        else if (base === "second") nn.third = n.second;
-        return nn;
-      });
       setGameLog(log => log.map((h, hi) => hi !== currentHalfIdx ? h : {
         ...h,
         atBats: h.atBats.map((ab, ai) => ai !== currentAtBatIdx ? ab : { ...ab, runnersAfter: nextRunners })
@@ -2102,11 +2658,10 @@ function GameRecordScreen({ onBack, gameOrder, teamName }) {
       showToast("盗塁成功");
     } else if (action === "盗塁死" || action === "牽制アウト") {
       addEvent(`${baseLabel}ランナー ${action}`);
-      const nextRunners = { ...runners, [base]: false };
+      const nextRunners = { ...runners, [base]: null };
       setRunners(nextRunners);
-      setRunnerNames(n => ({ ...n, [base]: null }));
       showToast(action);
-      doOut(nextRunners);
+      doOut(nextRunners, undefined, false);
     } else if (action === "牽制セーフ") {
       addEvent(`${baseLabel}ランナー 牽制セーフ`); showToast("牽制セーフ");
     }
@@ -2115,9 +2670,18 @@ function GameRecordScreen({ onBack, gameOrder, teamName }) {
 
   const canGoBack = history.length > 0;
   const currentRunner = runnerQueue[currentRunnerIdx];
+
+  // 現在の投手の投球数（gameLogから集計、pitchCount stateは全投手合算なので使わない）
+  const currentPitcherPitchCount = React.useMemo(() =>
+    gameLog.reduce((total, half) =>
+      total + half.atBats.reduce((sum, ab) =>
+        ab.pitcherNumber === pitcher.number ? sum + (ab.pitches?.length || 0) : sum, 0), 0),
+    [gameLog, pitcher.number]);
   const advanceOptions = (baseNum) => {
     const opts = [];
-    for (let b = baseNum; b <= 3; b++) opts.push({ label: BASE_NAMES[b], value: b });
+    for (let b = baseNum; b <= 3; b++) {
+      opts.push({ label: b === baseNum ? `${BASE_NAMES[b]}（進塁なし）` : BASE_NAMES[b], value: b });
+    }
     opts.push({ label:"ホーム（得点）", value:4 });
     opts.push({ label:"アウト（走塁死）", value:"out" });
     return opts;
@@ -2138,6 +2702,62 @@ function GameRecordScreen({ onBack, gameOrder, teamName }) {
               <Btn label="OK" bg={C.brandLight} border={C.brand} color={C.brand} onClick={() => setAlert(null)}/>
             </div>
           </div>
+        )}
+
+        {/* オーダー確認モーダル */}
+        {showOrderModal && (
+          <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:200, display:"flex", alignItems:"flex-end", justifyContent:"center" }}
+            onClick={() => setShowOrderModal(false)}>
+            <div onClick={e => e.stopPropagation()}
+              style={{ background:C.card, borderRadius:"20px 20px 0 0", width:"100%", maxWidth:480, maxHeight:"80vh", display:"flex", flexDirection:"column" }}>
+              <div style={{ padding:"16px 20px 12px", borderBottom:`1px solid ${C.divider}`, display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}>
+                <div style={{ fontSize:15, fontWeight:800, color:C.textPri }}>オーダー確認</div>
+                <div onClick={() => setShowOrderModal(false)}
+                  style={{ width:28, height:28, borderRadius:"50%", background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer" }}>
+                  <X size={16} color={C.textSec}/>
+                </div>
+              </div>
+              <div style={{ overflowY:"auto", flex:1, padding:"8px 0 24px" }}>
+                {[
+                  { label: `${activeTeamA}（表・先攻）`, batters: activeBattersA },
+                  { label: `${oppTeamName}（裏・後攻）`, batters: activeBattersB },
+                ].map(({ label, batters }) => (
+                  <div key={label} style={{ marginBottom:16 }}>
+                    <div style={{ padding:"6px 20px", fontSize:11, fontWeight:700, color:C.brand, background:C.brandLight }}>{label}</div>
+                    {batters.map((b, i) => (
+                      <div key={i} style={{ display:"flex", alignItems:"center", padding:"10px 20px", borderBottom:`1px solid ${C.divider}` }}>
+                        <div style={{ width:24, height:24, borderRadius:"50%", background:C.brandLight, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginRight:8 }}>
+                          <span style={{ fontSize:11, fontWeight:800, color:C.brand }}>{b.order}</span>
+                        </div>
+                        <div style={{ width:28, fontSize:11, color:C.textTer, flexShrink:0 }}>#{b.number}</div>
+                        <div style={{ flex:1, fontSize:13, fontWeight:600, color:C.textPri }}>{b.name}</div>
+                        <div style={{ fontSize:11, padding:"2px 8px", background:C.bg, borderRadius:6, color:C.textSec, border:`1px solid ${C.divider}` }}>{b.pos}</div>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 守備交代モーダル */}
+        {showSubModal && (
+          <SubstitutionModal
+            activeBattersA={activeBattersA} activeBattersB={activeBattersB}
+            benchA={benchA} benchB={benchB}
+            activeTeamA={activeTeamA} oppTeamName={oppTeamName}
+            subStep={subStep} setSubStep={setSubStep}
+            subTeam={subTeam} setSubTeam={setSubTeam}
+            subType={subType} setSubType={setSubType}
+            subOutSlot={subOutSlot} setSubOutSlot={setSubOutSlot}
+            subInPlayer={subInPlayer} setSubInPlayer={setSubInPlayer}
+            subNewPos={subNewPos} setSubNewPos={setSubNewPos}
+            subSwapSlot1={subSwapSlot1} setSubSwapSlot1={setSubSwapSlot1}
+            onClose={() => setShowSubModal(false)}
+            applyDefenseSub={applyDefenseSub}
+            applyPositionChange={applyPositionChange}
+          />
         )}
 
         {/* 試合終了モーダル */}
@@ -2269,22 +2889,38 @@ function GameRecordScreen({ onBack, gameOrder, teamName }) {
         <div style={{ background: C.bg, borderRadius:0 }}>
 
           {/* スコアバー */}
-          <div style={{ background: C.scoreBg, padding:"14px 20px 16px" }}>
-            <div style={{ fontSize:9, color:C.scoreSubText, textAlign:"center", letterSpacing:"0.15em", marginBottom:10, opacity:0.9, fontWeight:500 }}>NEO SCORE BOOK</div>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end" }}>
-              <div style={{ opacity:isTop?1:0.35, transition:"opacity 0.2s" }}>
-                <div style={{ color:C.scoreSubText, fontSize:11, marginBottom:2 }}>{activeTeamA}</div>
-                <div style={{ color:C.scoreText, fontSize:isTop?36:28, fontWeight:800, lineHeight:1 }}>{scoreA}</div>
+          {(() => {
+            const myBatting  = batting === "先攻" ? isTop : !isTop;
+            const oppBatting = !myBatting;
+            const nameStyle = (active) => ({
+              display: "inline-block",
+              color: C.scoreSubText, fontSize: 11, fontWeight: 600,
+              borderBottom: active ? `2px solid ${C.scoreSubText}` : "2px solid transparent",
+              paddingBottom: 1, marginBottom: 5,
+            });
+            return (
+              <div style={{ background: C.scoreBg, padding:"12px 16px 14px" }}>
+                <div style={{ fontSize:9, color:C.scoreSubText, textAlign:"center", letterSpacing:"0.15em", marginBottom:8, opacity:0.9, fontWeight:500 }}>
+                  {isEditMode ? "✎ 編集モード" : "NEO SCORE BOOK"}
+                </div>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <div style={{ opacity: myBatting ? 1 : 0.4, transition:"opacity 0.2s", minWidth:80 }}>
+                    <div style={nameStyle(myBatting)}>{myTeamNameRaw}</div>
+                    <div style={{ color:C.scoreText, fontSize: myBatting ? 36 : 28, fontWeight:800, lineHeight:1 }}>{myScore}</div>
+                  </div>
+                  <div style={{ textAlign:"center" }}>
+                    <div style={{ color:C.scoreSubText, fontSize:12 }}>{inning}回 {isTop?"▲ 表":"▼ 裏"}</div>
+                  </div>
+                  <div style={{ textAlign:"right", opacity: oppBatting ? 1 : 0.4, transition:"opacity 0.2s", minWidth:80 }}>
+                    <div style={{ ...nameStyle(oppBatting), display:"block", textAlign:"right" }}>
+                      <span style={{ display:"inline-block", borderBottom: oppBatting ? `2px solid ${C.scoreSubText}` : "2px solid transparent", paddingBottom:1 }}>{oppTeamNameRaw}</span>
+                    </div>
+                    <div style={{ color:C.scoreText, fontSize: oppBatting ? 36 : 28, fontWeight:800, lineHeight:1 }}>{oppScore}</div>
+                  </div>
+                </div>
               </div>
-              <div style={{ textAlign:"center", paddingBottom:4 }}>
-                <div style={{ color:C.scoreSubText, fontSize:12 }}>{inning}回 {isTop?"▲ 表":"▼ 裏"}</div>
-              </div>
-              <div style={{ textAlign:"right", opacity:isTop?0.35:1, transition:"opacity 0.2s" }}>
-                <div style={{ color:C.scoreSubText, fontSize:11, marginBottom:2 }}>{oppTeamName}</div>
-                <div style={{ color:C.scoreText, fontSize:isTop?28:36, fontWeight:800, lineHeight:1 }}>{scoreB}</div>
-              </div>
-            </div>
-          </div>
+            );
+          })()}
 
           {/* ── ゲーム内サブタブ ── */}
           <div style={{ display:"flex", background: C.card, borderBottom:`1px solid ${C.divider}` }}>
@@ -2305,7 +2941,7 @@ function GameRecordScreen({ onBack, gameOrder, teamName }) {
           </div>
 
           {/* 経過ビュー */}
-          {activeView === "history" && <HistoryView gameLog={gameLog} />}
+          {activeView === "history" && <HistoryView gameLog={gameLog} teamNameA={activeTeamA} teamNameB={oppTeamName}/>}
 
           {/* 成績ビュー */}
           {activeView === "stats" && (
@@ -2326,14 +2962,20 @@ function GameRecordScreen({ onBack, gameOrder, teamName }) {
           {activeView === "record" && <>
 
             {/* 戻るバー */}
-            <div style={{ padding:"6px 14px", borderBottom:`1px solid ${C.divider}`, display:"flex", alignItems:"center", minHeight:38 }}>
-              {canGoBack && (
+            <div style={{ padding:"6px 14px", borderBottom:`1px solid ${C.divider}`, display:"flex", alignItems:"center", justifyContent:"space-between", minHeight:38 }}>
+              {canGoBack ? (
                 <div
                   onClick={goBack}
                   style={{ display:"flex", alignItems:"center", gap:2, padding:"4px 12px 4px 6px", borderRadius:20, background:C.card, border:`1px solid ${C.divider}`, cursor:"pointer", userSelect:"none", boxShadow:"0 1px 4px rgba(0,0,0,0.06)" }}
                 >
                   <i className="ti ti-chevron-left" style={{ fontSize:16, color:C.textSec }} aria-hidden="true"/>
                   <span style={{ fontSize:13, color:C.textSec, fontWeight:500 }}>戻る</span>
+                </div>
+              ) : <div/>}
+              {screen === "main" && (
+                <div onClick={() => setShowOrderModal(true)}
+                  style={{ fontSize:11, color:C.brand, fontWeight:600, cursor:"pointer", padding:"4px 10px", borderRadius:20, background:C.brandLight }}>
+                  オーダー確認
                 </div>
               )}
             </div>
@@ -2363,7 +3005,7 @@ function GameRecordScreen({ onBack, gameOrder, teamName }) {
                 <div style={{ textAlign:"right" }}>
                   <div style={{ fontSize:10, color: C.textTer, marginBottom:2 }}>ピッチャー</div>
                   <div style={{ fontSize:13, fontWeight:700, color: C.textPri }}>#{pitcher.number} {pitcher.name}</div>
-                  <div style={{ marginTop:4, display:"inline-block", padding:"2px 10px", background: C.brandLight, borderRadius:20, fontSize:11, fontWeight:600, color: C.brand }}>{pitchCount}球</div>
+                  <div style={{ marginTop:4, display:"inline-block", padding:"2px 10px", background: C.brandLight, borderRadius:20, fontSize:11, fontWeight:600, color: C.brand }}>{currentPitcherPitchCount}球</div>
                 </div>
               </div>
 
@@ -2427,15 +3069,16 @@ function GameRecordScreen({ onBack, gameOrder, teamName }) {
 
               {/* サブ操作 */}
               <div style={{ padding:"8px 16px 16px", display:"flex", justifyContent:"center", alignItems:"center", gap:20 }}>
-                <span style={{ fontSize:11, color: C.textTer, cursor:"pointer" }}>選手交代</span>
+                <span onClick={openSubModal} style={{ fontSize:11, color: C.brand, fontWeight:600, cursor:"pointer", padding:"4px 10px", borderRadius:20, background:C.brandLight }}>選手交代</span>
                 <span
-                  onClick={stateHistory.length > 0 ? handleUndo : undefined}
+                  onClick={(stateHistory.length > 0 || isEditMode) ? handleUndo : undefined}
                   style={{
-                    fontSize:11, cursor: stateHistory.length > 0 ? "pointer" : "default",
-                    color: stateHistory.length > 0 ? C.textSec : C.textTer,
-                    borderBottom: stateHistory.length > 0 ? `1px dashed ${C.textTer}` : "none",
+                    fontSize:11,
+                    cursor: (stateHistory.length > 0 || isEditMode) ? "pointer" : "default",
+                    color: (stateHistory.length > 0 || isEditMode) ? C.textSec : C.textTer,
+                    borderBottom: (stateHistory.length > 0 || isEditMode) ? `1px dashed ${C.textTer}` : "none",
                   }}
-                >1球取消</span>
+                >{isEditMode ? "1打席戻す" : "1球取消"}</span>
                 <span style={{ fontSize:11, color: C.textTer, cursor:"pointer" }}>特殊処理</span>
                 <span style={{ width:1, height:10, background:C.divider }}/>
                 <span
@@ -2448,7 +3091,7 @@ function GameRecordScreen({ onBack, gameOrder, teamName }) {
               <div style={{ borderTop: `1px solid ${C.divider}`, padding: "0 14px" }}>
                 <div style={{ display: "flex", borderBottom: `1px solid ${C.divider}` }}>
                   <div style={{ width: 64, fontSize: 10, color: C.textTer, padding: "5px 0", flexShrink: 0 }}>チーム</div>
-                  {Array.from({ length: 9 }).map((_, i) => (
+                  {Array.from({ length: LINEUP_SIZE }).map((_, i) => (
                     <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 10, color: i + 1 === inning ? C.brand : C.textTer, fontWeight: i + 1 === inning ? 700 : 400, padding: "5px 0" }}>{i + 1}</div>
                   ))}
                   <div style={{ width: 32, textAlign: "center", fontSize: 10, fontWeight: 700, color: C.textPri, padding: "5px 0", flexShrink: 0 }}>計</div>
@@ -2466,7 +3109,7 @@ function GameRecordScreen({ onBack, gameOrder, teamName }) {
                   return (
                     <div key={team.name} style={{ display: "flex", borderBottom: `1px solid ${C.divider}` }}>
                       <div style={{ width: 64, fontSize: 11, fontWeight: 600, color: C.textPri, padding: "6px 0", flexShrink: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{team.name}</div>
-                      {Array.from({ length: 9 }).map((_, i) => {
+                      {Array.from({ length: LINEUP_SIZE }).map((_, i) => {
                         const started = i + 1 < inning || (i + 1 === inning && (!isTop || team.isTop));
                         const isCurrent = i + 1 === inning && started;
                         const val = inningScores[i+1];
@@ -2533,7 +3176,9 @@ function GameRecordScreen({ onBack, gameOrder, teamName }) {
                 <div style={{ fontSize:11, color:C.textTer, marginBottom:4 }}>
                   {selectedBase==="first"?"1塁":selectedBase==="second"?"2塁":"3塁"}ランナー
                 </div>
-                <div style={{ fontSize:14, fontWeight:600, color:C.textPri }}>アクションを選択</div>
+                <div style={{ fontSize:14, fontWeight:600, color:C.textPri }}>
+                  {runners[selectedBase] ? `#${runners[selectedBase].number} ${runners[selectedBase].name}` : "アクションを選択"}
+                </div>
               </div>
               <div style={{ display:"flex", flexDirection:"column", gap:7, padding:"12px 14px" }}>
                 <Btn label="盗塁成功"   bg={C.brandLight} border={C.brand} color={C.brand}
@@ -2556,77 +3201,232 @@ function GameRecordScreen({ onBack, gameOrder, teamName }) {
 // ─────────────────────────────
 // ホーム画面（試合タブ）
 // ─────────────────────────────
-const RECENT_GAMES = [
-  { id: 1, date: "6月8日",  opponent: "巨人", scoreA: 5, scoreB: 3, result: "勝" },
-  { id: 2, date: "6月5日",  opponent: "中日", scoreA: 2, scoreB: 4, result: "負" },
-  { id: 3, date: "6月1日",  opponent: "広島", scoreA: 7, scoreB: 2, result: "勝" },
-];
-const TEAM_STATS = { games: 12, wins: 8, losses: 4, winRate: ".667" };
+// ─────────────────────────────
+// シーズン成績集計
+// ─────────────────────────────
+function calcSeasonStats(games) {
+  const playerMap = {}; // number → stats
 
-function GamesTab({ team, onStartRecord, onStartOrder }) {
+  games.forEach(game => {
+    const myTopBottom = (game.game_state?.batting ?? "先攻") === "先攻" ? "表" : "裏";
+    (game.game_log || []).forEach(half => {
+      if (half.topBottom !== myTopBottom) return; // 自チームの攻撃のみ
+      half.atBats.forEach(ab => {
+        const num = ab.number;
+        if (!playerMap[num]) {
+          playerMap[num] = {
+            number: num, name: ab.name, pos: ab.pos,
+            pa: 0, atBats: 0, hits: 0, h1: 0, h2: 0, h3: 0, hr: 0,
+            rbi: 0, run: 0, bb: 0, ibb: 0, hbp: 0, so: 0, sac: 0, sf: 0,
+            tb: 0, sb: 0, risp_ab: 0, risp_hit: 0,
+          };
+        }
+        const s = playerMap[num];
+        const r = ab.result;
+        if (!r) return;
+
+        const isHit = ["ヒット","二塁打","三塁打","本塁打","1塁打","2塁打","3塁打","ホームラン"].some(h => r.includes(h));
+        const isH2  = r.includes("二塁打") || r.includes("2塁打");
+        const isH3  = r.includes("三塁打") || r.includes("3塁打");
+        const isHR  = r.includes("本塁打") || r.includes("ホームラン");
+        const isH1  = isHit && !isH2 && !isH3 && !isHR;
+        const isSF  = r.includes("犠飛");
+        const isSAC = r.includes("犠打") || r.includes("バント");
+        const isIBB = r.includes("故意四球");
+        const isBB  = r.includes("フォアボール") && !isIBB;
+        const isAB  = !["フォアボール","故意四球","デッドボール","犠打","犠飛","バント"].some(x => r.includes(x));
+        const isHBP = r.includes("デッドボール");
+
+        s.pa++;
+        if (isAB) s.atBats++;
+        if (isHit) s.hits++;
+        if (isH1) { s.h1++; s.tb += 1; }
+        if (isH2) { s.h2++; s.tb += 2; }
+        if (isH3) { s.h3++; s.tb += 3; }
+        if (isHR) { s.hr++; s.tb += 4; }
+        if (isBB)  s.bb++;
+        if (isIBB) s.ibb++;
+        if (isHBP) s.hbp++;
+        if (isStrikeout(r)) s.so++;
+        if (isSF)  s.sf++;
+        if (isSAC) s.sac++;
+        ab.events?.forEach(ev => { if (ev.includes("盗塁成功")) s.sb++; });
+
+        const rs = ab.runnersAtStart || {};
+        if (rs.second || rs.third) {
+          s.risp_ab  += isAB ? 1 : 0;
+          s.risp_hit += isHit ? 1 : 0;
+        }
+
+        const runs = ab.runsScored || 0;
+        if (runs > 0) {
+          const isDP = r.includes("ゲッツー");
+          if (!isDP) {
+            if ((isBB || isIBB || isHBP) && rs.first && rs.second && rs.third) s.rbi += 1;
+            else if (!isBB && !isIBB && !isHBP) s.rbi += runs;
+          }
+        }
+        // 得点者集計（runsScoredBy に背番号が記録されている場合）
+        (ab.runsScoredBy || []).forEach(scorerNum => {
+          if (playerMap[scorerNum]) playerMap[scorerNum].run = (playerMap[scorerNum].run || 0) + 1;
+        });
+      });
+    });
+  });
+
+  return Object.values(playerMap);
+}
+
+// 打率/出塁率/長打率/wOBA計算ヘルパー
+const sAvg  = (s) => s.atBats === 0 ? "-" : (s.hits / s.atBats).toFixed(3).replace("0.", ".");
+const sOBP  = (s) => {
+  const d = s.atBats + s.bb + s.ibb + s.hbp + s.sf;
+  return d === 0 ? "-" : ((s.hits + s.bb + s.ibb + s.hbp) / d).toFixed(3).replace("0.", ".");
+};
+const sSLG  = (s) => s.atBats === 0 ? "-" : (s.tb / s.atBats).toFixed(3).replace("0.", ".");
+const sOPS  = (s) => {
+  const o = parseFloat(("0" + sOBP(s)).replace("-", "0"));
+  const l = parseFloat(("0" + sSLG(s)).replace("-", "0"));
+  return (o + l).toFixed(3).replace("0.", ".");
+};
+const sISO  = (s) => s.atBats === 0 ? "-" : ((s.tb - s.hits) / s.atBats).toFixed(3).replace("0.", ".");
+const sWOBA = (s) => {
+  const denom = s.pa - s.ibb - s.sac;
+  if (denom <= 0) return "-";
+  const v = (0.69*s.bb + 0.72*s.hbp + 0.88*s.h1 + 1.26*s.h2 + 1.60*s.h3 + 2.07*s.hr) / denom;
+  return v.toFixed(3).replace("0.", ".");
+};
+const sBBK  = (s) => s.so === 0 ? "-" : (s.bb / s.so).toFixed(2);
+const sRISP = (s) => s.risp_ab === 0 ? "-" : (s.risp_hit / s.risp_ab).toFixed(3).replace("0.", ".");
+
+// ─────────────────────────────
+// 試合タブ（ホーム画面）
+// ─────────────────────────────
+function GamesTab({ team, onStartRecord, onStartOrder, onResume, onEdit }) {
+  const [games, setGames] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [typeFilter, setTypeFilter] = useState("all");
+  const currentYear = new Date().getFullYear();
+
+  useEffect(() => {
+    if (!team) return;
+    supabase
+      .from("nsb_games")
+      .select("id, game_date, opponent, score_my, score_opp, status, season, game_type")
+      .eq("team_name", team.name)
+      .order("game_date", { ascending: false })
+      .then(({ data }) => { setGames(data || []); setLoading(false); });
+  }, [team]);
+
+  const filtered = typeFilter === "all" ? games : games.filter(g => g.game_type === typeFilter);
+  const completed = filtered.filter(g => g.status !== "in_progress");
+  const wins    = completed.filter(g => g.score_my > g.score_opp).length;
+  const losses  = completed.filter(g => g.score_my < g.score_opp).length;
+  const draws   = completed.filter(g => g.score_my === g.score_opp).length;
+  const winRate = completed.length === 0 ? "---" : (wins / (wins + losses) || 0).toFixed(3).replace("0.", ".");
+
+  const fmtDate = (d) => {
+    if (!d) return "";
+    const dt = new Date(d);
+    return `${dt.getMonth() + 1}/${dt.getDate()}`;
+  };
+  const resultLabel = (g) => {
+    if (g.status === "in_progress") return { text: "途", bg: "#E8EAE0", color: C.textSec };
+    if (g.score_my > g.score_opp) return { text: "勝", bg: C.brandLight, color: C.brand };
+    if (g.score_my < g.score_opp) return { text: "負", bg: "#FEF0F0", color: "#8B2020" };
+    return { text: "分", bg: "#F0F0F0", color: C.textSec };
+  };
+
   return (
-    <div style={{ flex: 1 }}>
-      <div style={{ background: C.scoreBg, padding: "20px 20px 24px" }}>
+    <div style={{ flex: 1, overflowY: "auto" }}>
+      {/* ヘッダー */}
+      <div style={{ background: C.scoreBg, padding: "20px 20px 16px" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
           <div style={{ fontSize: 9, color: C.scoreSubText, letterSpacing: "0.15em", opacity: 0.8 }}>NEO SCORE BOOK</div>
           <div style={{ fontSize: 9, color: C.scoreSubText, opacity: 0.6 }}>{APP_VERSION}</div>
         </div>
-        <div style={{ fontSize: 22, fontWeight: 800, color: C.scoreText, marginBottom: 2 }}>{team ? team.name : "チーム名"}</div>
-        <div style={{ fontSize: 12, color: C.scoreSubText }}>{TEAM_STATS.games}試合　{TEAM_STATS.wins}勝 {TEAM_STATS.losses}敗　勝率 {TEAM_STATS.winRate}</div>
+        <div style={{ fontSize: 22, fontWeight: 800, color: C.scoreText, marginBottom: 4 }}>{team ? team.name : "チーム名"}</div>
+        <div style={{ fontSize: 12, color: C.scoreSubText }}>
+          {loading ? "..." : `${completed.length}試合　${wins}勝 ${losses}敗${draws > 0 ? ` ${draws}分` : ""}　勝率 ${winRate}`}
+        </div>
+        {/* 種別フィルター */}
+        <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+          {[["all","すべて"], ["公式戦","公式戦"], ["練習試合","練習試合"]].map(([v, label]) => (
+            <div key={v} onClick={() => setTypeFilter(v)}
+              style={{ fontSize: 11, padding: "4px 10px", borderRadius: 20, cursor: "pointer", fontWeight: typeFilter === v ? 700 : 400,
+                background: typeFilter === v ? "rgba(255,255,255,0.25)" : "transparent",
+                color: typeFilter === v ? C.scoreText : C.scoreSubText, border: `1px solid ${typeFilter === v ? "rgba(255,255,255,0.5)" : "transparent"}` }}>
+              {label}
+            </div>
+          ))}
+        </div>
       </div>
 
       <div style={{ padding: "16px 16px 32px", display: "flex", flexDirection: "column", gap: 16 }}>
-
         {/* 試合を記録する */}
-        <div onClick={onStartOrder} style={{ background: C.brand, borderRadius: 20, padding: "20px", boxShadow: "0 4px 20px rgba(61,107,61,0.35)", display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}
+        <div onClick={onStartOrder} style={{ background: C.brand, borderRadius: 20, padding: "18px 20px", boxShadow: "0 4px 20px rgba(61,107,61,0.35)", display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}
           onPointerDown={e => e.currentTarget.style.opacity = "0.85"}
           onPointerUp={e => e.currentTarget.style.opacity = "1"}
           onPointerLeave={e => e.currentTarget.style.opacity = "1"}
         >
-          <div style={{ width: 44, height: 44, borderRadius: "50%", background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <PenLine size={22} color={C.brandText}/>
+          <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <PenLine size={20} color={C.brandText}/>
           </div>
           <div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: C.brandText }}>試合を記録する</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: C.brandText }}>試合を記録する</div>
             <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", marginTop: 2 }}>オーダー登録 → 記録開始</div>
           </div>
           <ChevronRight size={20} color="rgba(255,255,255,0.6)" style={{ marginLeft: "auto" }}/>
         </div>
 
-        {/* 直近の試合 */}
-        <div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.textSec, display: "flex", alignItems: "center", gap: 6 }}>
-              <Calendar size={13} color={C.textSec}/>直近の試合
+        {/* チーム成績サマリー */}
+        <div style={{ background: C.card, borderRadius: 16, padding: "14px 16px", boxShadow: C.cardShadow, display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
+          {[{ label: "試合", value: loading ? "-" : completed.length },
+            { label: "勝利", value: loading ? "-" : wins },
+            { label: "敗北", value: loading ? "-" : losses },
+            { label: "勝率", value: loading ? "-" : winRate }].map(s => (
+            <div key={s.label} style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: C.textPri }}>{s.value}</div>
+              <div style={{ fontSize: 10, color: C.textTer, marginTop: 2 }}>{s.label}</div>
             </div>
-          </div>
-          <div style={{ background: C.card, borderRadius: 16, overflow: "hidden", boxShadow: C.cardShadow }}>
-            {RECENT_GAMES.map((g, i) => (
-              <div key={g.id} style={{ display: "flex", alignItems: "center", padding: "14px 16px", borderBottom: i < RECENT_GAMES.length - 1 ? `1px solid ${C.divider}` : "none" }}>
-                <div style={{ width: 40, fontSize: 11, color: C.textTer, flexShrink: 0 }}>{g.date}</div>
-                <div style={{ flex: 1, fontSize: 14, fontWeight: 600, color: C.textPri }}>vs {g.opponent}</div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: C.textPri, marginRight: 8 }}>{g.scoreA} - {g.scoreB}</div>
-                <div style={{ width: 28, height: 28, borderRadius: "50%", background: g.result === "勝" ? C.brandLight : "#FEF0F0", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: g.result === "勝" ? C.brand : "#8B2020" }}>{g.result}</span>
-                </div>
-              </div>
-            ))}
-          </div>
+          ))}
         </div>
 
-        {/* チーム成績 */}
+        {/* 試合一覧 */}
         <div>
           <div style={{ fontSize: 12, fontWeight: 700, color: C.textSec, display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-            <TrendingUp size={13} color={C.textSec}/>チーム成績
+            <Calendar size={13} color={C.textSec}/>試合一覧
           </div>
-          <div style={{ background: C.card, borderRadius: 16, padding: "16px", boxShadow: C.cardShadow, display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
-            {[{ label: "試合", value: TEAM_STATS.games }, { label: "勝利", value: TEAM_STATS.wins }, { label: "敗北", value: TEAM_STATS.losses }, { label: "勝率", value: TEAM_STATS.winRate }].map(s => (
-              <div key={s.label} style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 20, fontWeight: 800, color: C.textPri }}>{s.value}</div>
-                <div style={{ fontSize: 10, color: C.textTer, marginTop: 2 }}>{s.label}</div>
-              </div>
-            ))}
-          </div>
+          {loading ? (
+            <div style={{ textAlign:"center", padding: 24, color: C.textTer, fontSize: 13 }}>読み込み中...</div>
+          ) : filtered.length === 0 ? (
+            <div style={{ background: C.card, borderRadius: 16, padding: 24, textAlign: "center", color: C.textTer, fontSize: 13, boxShadow: C.cardShadow }}>
+              試合記録がありません
+            </div>
+          ) : (
+            <div style={{ background: C.card, borderRadius: 16, overflow: "hidden", boxShadow: C.cardShadow }}>
+              {filtered.map((g, i) => {
+                const rl = resultLabel(g);
+                return (
+                  <div key={g.id}
+                    onClick={g.status === "in_progress"
+                      ? () => onResume && onResume(g.id)
+                      : () => onEdit && onEdit(g.id)}
+                    style={{ display: "flex", alignItems: "center", padding: "13px 16px", borderBottom: i < filtered.length - 1 ? `1px solid ${C.divider}` : "none", cursor: "pointer" }}>
+                    <div style={{ width: 36, fontSize: 11, color: C.textTer, flexShrink: 0 }}>{fmtDate(g.game_date)}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: C.textPri }}>vs {g.opponent}</div>
+                      {g.game_type && <div style={{ fontSize: 10, color: C.textTer }}>{g.game_type}</div>}
+                    </div>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: C.textPri, marginRight: 8 }}>{g.score_my} - {g.score_opp}</div>
+                    <div style={{ width: 26, height: 26, borderRadius: "50%", background: rl.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: rl.color }}>{rl.text}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -2634,14 +3434,224 @@ function GamesTab({ team, onStartRecord, onStartOrder }) {
 }
 
 // ─────────────────────────────
-// 成績・設定プレースホルダー
+// シーズン成績タブ
 // ─────────────────────────────
-function PlaceholderTab({ label }) {
+function SeasonStatsTab({ team }) {
+  const [games, setGames] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [selectedPlayer, setSelectedPlayer] = useState(null);
+  const [compact, setCompact] = useState(true);
+  const currentYear = new Date().getFullYear();
+
+  useEffect(() => {
+    if (!team) return;
+    supabase
+      .from("nsb_games")
+      .select("id, game_date, opponent, score_my, score_opp, status, season, game_type, game_log")
+      .eq("team_name", team.name)
+      .order("game_date", { ascending: false })
+      .then(({ data }) => { setGames(data || []); setLoading(false); });
+  }, [team]);
+
+  const filtered = games.filter(g => {
+    if (typeFilter !== "all" && g.game_type !== typeFilter) return false;
+    return true;
+  });
+
+  const seasonStats = React.useMemo(() => calcSeasonStats(filtered), [filtered]);
+
+  // 選手クリック時の試合別成績
+  const playerGames = React.useMemo(() => {
+    if (!selectedPlayer) return [];
+    return filtered.map(game => {
+      const atBats = [];
+      (game.game_log || []).forEach(half => {
+        if (half.topBottom !== "表") return;
+        half.atBats.forEach(ab => { if (ab.number === selectedPlayer.number) atBats.push({ ...ab, half }); });
+      });
+      if (atBats.length === 0) return null;
+      // 1試合分の小計
+      const ab = atBats.filter(ab => {
+        const r = ab.result || "";
+        return !["フォアボール","故意四球","デッドボール","犠打","犠飛","バント"].some(x => r.includes(x));
+      }).length;
+      const h = atBats.filter(ab => {
+        const r = ab.result || "";
+        return ["ヒット","二塁打","三塁打","本塁打","1塁打","2塁打","3塁打","ホームラン"].some(x => r.includes(x));
+      }).length;
+      const rbi = atBats.reduce((sum, ab) => {
+        const r = ab.result || "";
+        const runs = ab.runsScored || 0;
+        if (runs === 0) return sum;
+        if (r.includes("ゲッツー")) return sum;
+        const isBBH = r.includes("フォアボール") || r.includes("故意四球") || r.includes("デッドボール");
+        const rs = ab.runnersAtStart || {};
+        if (isBBH && rs.first && rs.second && rs.third) return sum + 1;
+        if (!isBBH) return sum + runs;
+        return sum;
+      }, 0);
+      const hr = atBats.filter(ab => { const r = ab.result||""; return r.includes("本塁打")||r.includes("ホームラン"); }).length;
+      return { game, pa: atBats.length, atBats: ab, hits: h, rbi, hr };
+    }).filter(Boolean);
+  }, [selectedPlayer, filtered]);
+
+  const StatCell = ({ v, hi }) => (
+    <div style={{ width: 36, textAlign: "center", fontSize: 12, flexShrink: 0, color: hi && v > 0 ? C.brand : C.textPri, fontWeight: hi && v > 0 ? 700 : 400 }}>{v}</div>
+  );
+
+  const fmtDate = (d) => { if (!d) return ""; const dt = new Date(d); return `${dt.getMonth()+1}/${dt.getDate()}`; };
+
   return (
-    <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8 }}>
-      <div style={{ fontSize: 32 }}>🚧</div>
-      <div style={{ fontSize: 14, fontWeight: 700, color: C.textSec }}>{label}</div>
-      <div style={{ fontSize: 12, color: C.textTer }}>準備中です</div>
+    <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+      {/* ヘッダー */}
+      <div style={{ background: C.scoreBg, padding: "16px 16px 12px", flexShrink: 0 }}>
+        <div style={{ fontSize: 16, fontWeight: 800, color: C.scoreText, marginBottom: 8 }}>シーズン成績</div>
+        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+          {[["all","すべて"],["公式戦","公式戦"],["練習試合","練習試合"]].map(([v, label]) => (
+            <div key={v} onClick={() => setTypeFilter(v)}
+              style={{ fontSize: 11, padding: "4px 10px", borderRadius: 20, cursor: "pointer", fontWeight: typeFilter === v ? 700 : 400,
+                background: typeFilter === v ? "rgba(255,255,255,0.25)" : "transparent",
+                color: typeFilter === v ? C.scoreText : C.scoreSubText, border: `1px solid ${typeFilter === v ? "rgba(255,255,255,0.5)" : "transparent"}` }}>
+              {label}
+            </div>
+          ))}
+          <div style={{ marginLeft: "auto", fontSize: 11, color: C.scoreSubText }}>{filtered.length}試合</div>
+        </div>
+      </div>
+
+      {loading ? (
+        <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", color: C.textTer, fontSize:13 }}>読み込み中...</div>
+      ) : seasonStats.length === 0 ? (
+        <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:8 }}>
+          <div style={{ fontSize: 13, color: C.textTer }}>試合記録がありません</div>
+        </div>
+      ) : (
+        <div style={{ flex: 1, overflowY: "auto" }}>
+          {/* 表示切替 */}
+          <div style={{ display:"flex", justifyContent:"flex-end", padding:"8px 16px 4px" }}>
+            <div onClick={() => setCompact(!compact)}
+              style={{ fontSize: 11, color: C.brand, fontWeight: 600, cursor: "pointer", padding:"4px 10px", borderRadius:20, background: C.brandLight }}>
+              {compact ? "詳細表示" : "コンパクト"}
+            </div>
+          </div>
+
+          {/* ヘッダー行 */}
+          <div style={{ display:"flex", padding:"4px 16px 4px 12px", borderBottom:`1px solid ${C.divider}`, background: C.card }}>
+            <div style={{ width: 80, fontSize: 10, color: C.textTer, flexShrink: 0 }}>選手</div>
+            {compact ? (
+              <>
+                <div style={{ width:36, textAlign:"center", fontSize:10, color:C.textTer, flexShrink:0 }}>打率</div>
+                <div style={{ width:36, textAlign:"center", fontSize:10, color:C.textTer, flexShrink:0 }}>出塁</div>
+                <div style={{ width:36, textAlign:"center", fontSize:10, color:C.textTer, flexShrink:0 }}>長打</div>
+                <div style={{ width:36, textAlign:"center", fontSize:10, color:C.brand, flexShrink:0, fontWeight:700 }}>OPS</div>
+                <div style={{ width:36, textAlign:"center", fontSize:10, color:C.textTer, flexShrink:0 }}>wOBA</div>
+              </>
+            ) : (
+              <>
+                {["打席","打数","安打","二塁","三塁","本塁","打点","得点","四球","三振","盗塁","長打","得点圏","打率","出塁","OPS","ISO"].map(h => (
+                  <div key={h} style={{ width:36, textAlign:"center", fontSize:10, color: h==="OPS"?C.brand:C.textTer, flexShrink:0, fontWeight: h==="OPS"?700:400 }}>{h}</div>
+                ))}
+              </>
+            )}
+          </div>
+
+          {/* 選手行 */}
+          {seasonStats.map((s, i) => (
+            <div key={s.number} onClick={() => setSelectedPlayer(s)}
+              style={{ display:"flex", alignItems:"center", padding:"10px 16px 10px 12px",
+                borderBottom:`1px solid ${C.divider}`, background: i%2===0 ? C.card : C.bg, cursor:"pointer" }}
+              onPointerDown={e => e.currentTarget.style.opacity="0.7"}
+              onPointerUp={e => e.currentTarget.style.opacity="1"}
+              onPointerLeave={e => e.currentTarget.style.opacity="1"}
+            >
+              <div style={{ width: 80, flexShrink: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.textPri }}>{s.name}</div>
+                <div style={{ fontSize: 10, color: C.textTer }}>#{s.number}</div>
+              </div>
+              {compact ? (
+                <>
+                  <div style={{ width:36, textAlign:"center", fontSize:13, fontWeight:700, color:C.textPri, flexShrink:0 }}>{sAvg(s)}</div>
+                  <div style={{ width:36, textAlign:"center", fontSize:12, color:C.textSec, flexShrink:0 }}>{sOBP(s)}</div>
+                  <div style={{ width:36, textAlign:"center", fontSize:12, color:C.textSec, flexShrink:0 }}>{sSLG(s)}</div>
+                  <div style={{ width:36, textAlign:"center", fontSize:13, fontWeight:700, color:C.brand, flexShrink:0 }}>{sOPS(s)}</div>
+                  <div style={{ width:36, textAlign:"center", fontSize:12, color:C.textSec, flexShrink:0 }}>{sWOBA(s)}</div>
+                </>
+              ) : (
+                <>
+                  {[s.pa, s.atBats, s.hits, s.h2, s.h3, s.hr, s.rbi, s.run, s.bb, s.so, s.sb, s.tb].map((v, vi) => (
+                    <StatCell key={vi} v={v} hi={[5,6,7,10].includes(vi)}/>
+                  ))}
+                  <div style={{ width:36, textAlign:"center", fontSize:11, color: s.risp_ab>0?C.brand:C.textTer, flexShrink:0 }}>{sRISP(s)}</div>
+                  <div style={{ width:36, textAlign:"center", fontSize:11, color:C.textPri, flexShrink:0 }}>{sAvg(s)}</div>
+                  <div style={{ width:36, textAlign:"center", fontSize:11, color:C.textSec, flexShrink:0 }}>{sOBP(s)}</div>
+                  <div style={{ width:36, textAlign:"center", fontSize:12, fontWeight:700, color:C.brand, flexShrink:0 }}>{sOPS(s)}</div>
+                  <div style={{ width:36, textAlign:"center", fontSize:11, color:C.textSec, flexShrink:0 }}>{sISO(s)}</div>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 選手別試合詳細モーダル */}
+      {selectedPlayer && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:300, display:"flex", alignItems:"flex-end", justifyContent:"center" }}
+          onClick={() => setSelectedPlayer(null)}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: C.card, borderRadius:"20px 20px 0 0", width:"100%", maxWidth:480, maxHeight:"80vh", display:"flex", flexDirection:"column" }}>
+            {/* モーダルヘッダー */}
+            <div style={{ padding:"16px 20px 12px", borderBottom:`1px solid ${C.divider}`, flexShrink:0 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <div>
+                  <div style={{ fontSize:16, fontWeight:800, color:C.textPri }}>{selectedPlayer.name}</div>
+                  <div style={{ fontSize:11, color:C.textTer }}>#{selectedPlayer.number} · {selectedPlayer.pos}</div>
+                </div>
+                <div onClick={() => setSelectedPlayer(null)}
+                  style={{ width:28, height:28, borderRadius:"50%", background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer" }}>
+                  <X size={16} color={C.textSec}/>
+                </div>
+              </div>
+              {/* 通算サマリー */}
+              <div style={{ display:"flex", gap:12, marginTop:10 }}>
+                {[["打率",sAvg(selectedPlayer)],["出塁",sOBP(selectedPlayer)],["OPS",sOPS(selectedPlayer)],["本塁打",selectedPlayer.hr],["打点",selectedPlayer.rbi]].map(([l,v]) => (
+                  <div key={l} style={{ textAlign:"center" }}>
+                    <div style={{ fontSize:14, fontWeight:800, color: l==="OPS"?C.brand:C.textPri }}>{v}</div>
+                    <div style={{ fontSize:9, color:C.textTer }}>{l}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* 試合別成績リスト */}
+            <div style={{ overflowY:"auto", flex:1 }}>
+              <div style={{ display:"flex", padding:"6px 16px", background:C.bg, fontSize:10, color:C.textTer, gap:0 }}>
+                <div style={{ width:44, flexShrink:0 }}>日付</div>
+                <div style={{ flex:1 }}>相手</div>
+                <div style={{ width:28, textAlign:"center", flexShrink:0 }}>打席</div>
+                <div style={{ width:28, textAlign:"center", flexShrink:0 }}>打数</div>
+                <div style={{ width:28, textAlign:"center", flexShrink:0 }}>安打</div>
+                <div style={{ width:28, textAlign:"center", flexShrink:0 }}>打点</div>
+                <div style={{ width:28, textAlign:"center", flexShrink:0 }}>HR</div>
+              </div>
+              {playerGames.map((pg, i) => (
+                <div key={pg.game.id} style={{ display:"flex", alignItems:"center", padding:"11px 16px",
+                  borderBottom:`1px solid ${C.divider}`, background: i%2===0?C.card:C.bg }}>
+                  <div style={{ width:44, fontSize:11, color:C.textTer, flexShrink:0 }}>{fmtDate(pg.game.game_date)}</div>
+                  <div style={{ flex:1, fontSize:13, fontWeight:600, color:C.textPri }}>vs {pg.game.opponent}</div>
+                  {[pg.pa, pg.atBats, pg.hits, pg.rbi, pg.hr].map((v, vi) => (
+                    <div key={vi} style={{ width:28, textAlign:"center", fontSize:13, flexShrink:0,
+                      color: vi===2&&v>0?C.brand : vi===4&&v>0?"#C45000":C.textPri,
+                      fontWeight: (vi===2&&v>0)||(vi===4&&v>0)?700:400 }}>{v}</div>
+                  ))}
+                </div>
+              ))}
+              {playerGames.length === 0 && (
+                <div style={{ padding:24, textAlign:"center", fontSize:13, color:C.textTer }}>出場記録なし</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2757,12 +3767,80 @@ function NeoScoreBookApp() {
   const [team, setTeam] = useState(null);
   const [appLoading, setAppLoading] = useState(true);
   const [gameOrder, setGameOrder] = useState(null);
+  const [resumeData, setResumeData] = useState(null);
   const [leaveGameConfirm, setLeaveGameConfirm] = useState(null); // null | tabId
 
   // 起動時にチーム情報を取得
   useEffect(() => {
     loadTeam();
   }, []);
+
+  const loadGameData = async (gameId) => {
+    const { data } = await supabase
+      .from("nsb_games")
+      .select("id, game_state, game_log, game_date, game_type, tournament, opponent, score_my, score_opp")
+      .eq("id", gameId).single();
+    if (!data) return null;
+    const gs = data.game_state || {};
+    const batting = gs.batting || "先攻";
+    const scoreA = batting === "先攻" ? (data.score_my || 0) : (data.score_opp || 0);
+    const scoreB = batting === "先攻" ? (data.score_opp || 0) : (data.score_my || 0);
+    const myLineup = (batting === "先攻" ? (gs.lineup || []) : (gs.oppLineup || []))
+      .map((p, i) => ({ order: p.order || i+1, player: { number: p.number, name: p.name }, pos: p.pos || "-" }));
+    const order = {
+      batting, myLineup,
+      oppLineup: batting === "先攻" ? (gs.oppLineup || []) : (gs.lineup || []),
+      oppTeamName: data.opponent || "",
+      gameDate: data.game_date, gameType: data.game_type, tournament: data.tournament,
+    };
+    return { data, gs, batting, scoreA, scoreB, order, log: data.game_log || [] };
+  };
+
+  const handleEdit = async (gameId) => {
+    const loaded = await loadGameData(gameId);
+    if (!loaded) return;
+    const { data, log, order, scoreA, scoreB } = loaded;
+    let batterIdxA = 0, batterIdxB = -1;
+    for (const half of log) {
+      if (half.topBottom === "表") batterIdxA += half.atBats.length;
+      else batterIdxB += half.atBats.length;
+    }
+    batterIdxA = batterIdxA > 0 ? (batterIdxA - 1) % LINEUP_SIZE : 0;
+    batterIdxB = batterIdxB >= 0 ? batterIdxB % LINEUP_SIZE : -1;
+    const lastHalf = log.length > 0 ? log[log.length - 1] : null;
+    setGameOrder(order);
+    setResumeData({
+      gameId: data.id, editMode: true,
+      inning: lastHalf?.inning || 1,
+      isTop: lastHalf ? lastHalf.topBottom === "表" : true,
+      balls: 0, strikes: 0, outs: 0,
+      runners: { ...RUNNERS_INIT },
+      batterIdxA, batterIdxB, gameLog: log, scoreA, scoreB,
+    });
+    setScreen("record");
+  };
+
+  const handleResume = async (gameId) => {
+    const loaded = await loadGameData(gameId);
+    if (!loaded) return;
+    const { data, gs, order, scoreA, scoreB, log } = loaded;
+    setGameOrder(order);
+    setResumeData({
+      gameId: data.id,
+      inning: gs.inning || 1,
+      isTop: gs.isTop !== undefined ? gs.isTop : true,
+      balls: gs.balls || 0, strikes: gs.strikes || 0, outs: gs.outs || 0,
+      runners: migrateRunners(gs.runners, gs.runnerNames, gs.runnerNumbers),
+      batterIdxA: gs.batterIdxA || 0,
+      batterIdxB: gs.batterIdxB !== undefined ? gs.batterIdxB : -1,
+      gameLog: log, scoreA, scoreB,
+      currentLineupA: gs.currentLineupA || null,
+      currentLineupB: gs.currentLineupB || null,
+      substitutions:  gs.substitutions  || [],
+      runnerPitchers:  gs.runnerPitchers  || { first: null, second: null, third: null },
+    });
+    setScreen("record");
+  };
 
   const loadTeam = async () => {
     try {
@@ -2794,12 +3872,12 @@ function NeoScoreBookApp() {
   const renderContent = () => {
     // 試合タブの画面遷移
     if (activeTab === "games") {
-      if (screen === "order") return <OrderRegistration onBack={() => setScreen("home")} onNext={(order) => { setGameOrder(order); setScreen("record"); }} teamId={team.id}/>;
-      if (screen === "record") return <GameRecordScreen onBack={() => setScreen("home")} gameOrder={gameOrder} teamName={team.name}/>;
-      return <GamesTab team={team} onStartOrder={() => setScreen("order")} onStartRecord={() => setScreen("record")}/>;
+      if (screen === "order") return <OrderRegistration onBack={() => setScreen("home")} onNext={(order) => { setGameOrder(order); setResumeData(null); setScreen("record"); }} teamId={team.id}/>;
+      if (screen === "record") return <GameRecordScreen onBack={() => { setScreen("home"); setResumeData(null); }} gameOrder={gameOrder} teamName={team.name} resumeData={resumeData}/>;
+      return <GamesTab team={team} onStartOrder={() => setScreen("order")} onStartRecord={() => setScreen("record")} onResume={handleResume} onEdit={handleEdit}/>;
     }
     if (activeTab === "players") return <PlayerManagement teamId={team.id} teamName={team.name}/>;
-    if (activeTab === "stats")   return <PlaceholderTab label="成績"/>;
+    if (activeTab === "stats")   return <SeasonStatsTab team={team}/>;
     if (activeTab === "settings") return <SettingsScreen team={team} onUpdate={(t) => setTeam(t)}/>;
   };
 
