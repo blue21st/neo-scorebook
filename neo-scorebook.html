@@ -1997,8 +1997,6 @@ function GameRecordScreen({ onBack, gameOrder, teamName, resumeData = null }) {
   const [outs, setOuts] = useState(rd?.outs || 0);
   const [inning, setInning] = useState(rd?.inning || 1);
   const [isTop, setIsTop] = useState(rd ? rd.isTop : true);
-  const [scoreA, setScoreA] = useState(rd?.scoreA || 0);
-  const [scoreB, setScoreB] = useState(rd?.scoreB || 0);
   const [batterIdxA, setBatterIdxA] = useState(rd?.batterIdxA || 0);
   const [batterIdxB, setBatterIdxB] = useState(rd?.batterIdxB ?? -1);
   const [runners, setRunners] = useState(() => migrateRunners(rd?.runners, rd?.runnerNames, rd?.runnerNumbers));
@@ -2063,6 +2061,15 @@ function GameRecordScreen({ onBack, gameOrder, teamName, resumeData = null }) {
 
   const [gameLog, setGameLog] = useState(() =>
     rd?.gameLog?.length > 0 ? rd.gameLog : [initHalf(1, true, activeBattersA, 0)]
+  );
+
+  const scoreA = React.useMemo(() =>
+    gameLog.filter(h => h.topBottom === "表").flatMap(h => h.atBats).reduce((s, ab) => s + (ab.runsScored || 0), 0),
+    [gameLog]
+  );
+  const scoreB = React.useMemo(() =>
+    gameLog.filter(h => h.topBottom === "裏").flatMap(h => h.atBats).reduce((s, ab) => s + (ab.runsScored || 0), 0),
+    [gameLog]
   );
 
   // 現在のハーフイニングと打席へのアクセサ
@@ -2142,29 +2149,20 @@ function GameRecordScreen({ onBack, gameOrder, teamName, resumeData = null }) {
   const addScore = (n, scorerNumbers = []) => {
     if (n <= 0) return;
     const nums = scorerNumbers.filter(x => x != null);
-    if (isTop) {
-      const nextA = scoreA + n;
-      setScoreA(nextA);
-      setGameLog(log => log.map((h, hi) => hi !== currentHalfIdx ? h : {
+    setGameLog(log => {
+      const curA = log.filter(h => h.topBottom === "表").flatMap(h => h.atBats).reduce((s, ab) => s + (ab.runsScored || 0), 0);
+      const curB = log.filter(h => h.topBottom === "裏").flatMap(h => h.atBats).reduce((s, ab) => s + (ab.runsScored || 0), 0);
+      const nextA = isTop ? curA + n : curA;
+      const nextB = isTop ? curB : curB + n;
+      return log.map((h, hi) => hi !== currentHalfIdx ? h : {
         ...h,
         atBats: h.atBats.map((ab, ai) => ai !== currentAtBatIdx ? ab : {
           ...ab, runsScored: (ab.runsScored||0) + n,
           runsScoredBy: [...(ab.runsScoredBy||[]), ...nums],
-          scoreAfterA: nextA, scoreAfterB: scoreB,
+          scoreAfterA: nextA, scoreAfterB: nextB,
         })
-      }));
-    } else {
-      const nextB = scoreB + n;
-      setScoreB(nextB);
-      setGameLog(log => log.map((h, hi) => hi !== currentHalfIdx ? h : {
-        ...h,
-        atBats: h.atBats.map((ab, ai) => ai !== currentAtBatIdx ? ab : {
-          ...ab, runsScored: (ab.runsScored||0) + n,
-          runsScoredBy: [...(ab.runsScoredBy||[]), ...nums],
-          scoreAfterA: scoreA, scoreAfterB: nextB,
-        })
-      }));
-    }
+      });
+    });
   };
 
   const resetAtBat = () => { setBalls(0); setStrikes(0); };
@@ -2438,7 +2436,7 @@ function GameRecordScreen({ onBack, gameOrder, teamName, resumeData = null }) {
   const saveSnapshot = () => {
     setStateHistory(h => [...h, {
       balls, strikes, outs, inning, isTop,
-      scoreA, scoreB, batterIdxA, batterIdxB,
+      batterIdxA, batterIdxB,
       runners: { ...runners }, pitchCount,
       gameLog: JSON.parse(JSON.stringify(gameLog)),
       currentLineupA: currentLineupA ? [...currentLineupA] : null,
@@ -2515,16 +2513,6 @@ function GameRecordScreen({ onBack, gameOrder, teamName, resumeData = null }) {
     const targetAb      = lastHalf.atBats[targetAbIdx];
     if (!targetAb?.result) { showToast("これ以上戻れません"); return; }
 
-    // targetAb の前のスコアを算出
-    let newScoreA = 0, newScoreB = 0;
-    for (let hi = 0; hi < newLog.length; hi++) {
-      const endAi = hi === targetHalfIdx ? targetAbIdx : newLog[hi].atBats.length;
-      for (let ai = 0; ai < endAi; ai++) {
-        const ab = newLog[hi].atBats[ai];
-        if (ab.scoreAfterA != null) newScoreA = ab.scoreAfterA;
-        if (ab.scoreAfterB != null) newScoreB = ab.scoreAfterB;
-      }
-    }
     // 同イニング内のアウト数（targetAb より前）
     let newOuts = 0;
     for (let ai = 0; ai < targetAbIdx; ai++) {
@@ -2548,7 +2536,6 @@ function GameRecordScreen({ onBack, gameOrder, teamName, resumeData = null }) {
     setGameLog(newLog);
     setInning(lastHalf.inning);
     setIsTop(isTop);
-    setScoreA(newScoreA); setScoreB(newScoreB);
     setOuts(newOuts);
     setRunners(migrateRunners(targetAb.runnersAtStart, targetAb.runnerNamesAtStart, targetAb.runnerNumbersAtStart));
     setBalls(bso.balls); setStrikes(bso.strikes);
@@ -2583,8 +2570,6 @@ function GameRecordScreen({ onBack, gameOrder, teamName, resumeData = null }) {
     setOuts(prev.outs);
     setInning(prev.inning);
     setIsTop(prev.isTop);
-    setScoreA(prev.scoreA);
-    setScoreB(prev.scoreB);
     setBatterIdxA(prev.batterIdxA);
     setBatterIdxB(prev.batterIdxB);
     setRunners(prev.runners ?? { ...RUNNERS_INIT });
@@ -3815,7 +3800,7 @@ function NeoScoreBookApp() {
       isTop: lastHalf ? lastHalf.topBottom === "表" : true,
       balls: 0, strikes: 0, outs: 0,
       runners: { ...RUNNERS_INIT },
-      batterIdxA, batterIdxB, gameLog: log, scoreA, scoreB,
+      batterIdxA, batterIdxB, gameLog: log,
     });
     setScreen("record");
   };
@@ -3833,7 +3818,7 @@ function NeoScoreBookApp() {
       runners: migrateRunners(gs.runners, gs.runnerNames, gs.runnerNumbers),
       batterIdxA: gs.batterIdxA || 0,
       batterIdxB: gs.batterIdxB !== undefined ? gs.batterIdxB : -1,
-      gameLog: log, scoreA, scoreB,
+      gameLog: log,
       currentLineupA: gs.currentLineupA || null,
       currentLineupB: gs.currentLineupB || null,
       substitutions:  gs.substitutions  || [],
