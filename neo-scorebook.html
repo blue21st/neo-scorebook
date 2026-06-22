@@ -2244,9 +2244,9 @@ function GameRecordScreen({ onBack, gameOrder, teamName, resumeData = null }) {
 
   const buildRunnerQueue = (r) => {
     const q = [];
-    if (r.first)  q.push({ base:"first",  label:"1塁", baseNum:1, name: r.first.name,  number: r.first.number  });
-    if (r.second) q.push({ base:"second", label:"2塁", baseNum:2, name: r.second.name, number: r.second.number });
     if (r.third)  q.push({ base:"third",  label:"3塁", baseNum:3, name: r.third.name,  number: r.third.number  });
+    if (r.second) q.push({ base:"second", label:"2塁", baseNum:2, name: r.second.name, number: r.second.number });
+    if (r.first)  q.push({ base:"first",  label:"1塁", baseNum:1, name: r.first.name,  number: r.first.number  });
     return q;
   };
 
