@@ -485,8 +485,17 @@ function StatsView({ gameLog, teamNameA, teamNameB }) {
           }
         }
 
-        // 走塁イベントから盗塁
-        ab.events?.forEach(ev => { if (ev.includes("盗塁成功")) s.sb++; });
+        // 走塁イベントから盗塁（ランナー本人に帰属）
+        ab.events?.forEach(ev => {
+          const m = ev.match(/ランナー #(\d+) 盗塁成功/);
+          if (!m) return;
+          const rn = parseInt(m[1]);
+          if (!stats[rn]) {
+            stats[rn] = { number: rn, name: `#${rn}`, order: 99, pos: "-",
+              pa: 0, atBats: 0, hits: 0, rbi: 0, hr: 0, sb: 0, bb: 0, hbp: 0, so: 0, sac: 0 };
+          }
+          stats[rn].sb++;
+        });
       });
     });
 
@@ -2625,8 +2634,8 @@ function GameRecordScreen({ onBack, gameOrder, teamName, resumeData = null }) {
     saveSnapshot();
     const baseLabel = base === "first" ? "1塁" : base === "second" ? "2塁" : "3塁";
     if (action === "盗塁成功") {
-      addEvent(`${baseLabel}ランナー 盗塁成功`);
       const stolen = runners[base];
+      addEvent(`${baseLabel}ランナー #${stolen?.number ?? "?"} 盗塁成功`);
       const nextRunners = { ...runners, [base]: null };
       if (base === "first")       { nextRunners.second = stolen; }
       else if (base === "second") { nextRunners.third  = stolen; }
