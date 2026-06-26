@@ -25,7 +25,7 @@
   <script type="text/babel">
     const { useState, useRef, useEffect } = React;
 
-    const APP_VERSION = "v2026.06.26-2";
+    const APP_VERSION = "v2026.06.27-1";
 
     // Supabase接続
     const SUPABASE_URL = "https://zorxexynepvbaajblsfm.supabase.co";
@@ -2347,9 +2347,9 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
 
   const buildRunnerQueue = (r) => {
     const q = [];
-    if (r.third)  q.push({ base:"third",  label:"3塁", baseNum:3, name: r.third.name,  number: r.third.number  });
-    if (r.second) q.push({ base:"second", label:"2塁", baseNum:2, name: r.second.name, number: r.second.number });
-    if (r.first)  q.push({ base:"first",  label:"1塁", baseNum:1, name: r.first.name,  number: r.first.number  });
+    if (r.third)  q.push({ base:"third",  label:"3塁", baseNum:3, name: r.third.name,  number: r.third.number,  playerId: r.third.playerId  ?? null });
+    if (r.second) q.push({ base:"second", label:"2塁", baseNum:2, name: r.second.name, number: r.second.number, playerId: r.second.playerId ?? null });
+    if (r.first)  q.push({ base:"first",  label:"1塁", baseNum:1, name: r.first.name,  number: r.first.number,  playerId: r.first.playerId  ?? null });
     return q;
   };
 
@@ -2417,15 +2417,16 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
   const handleRunnerAdvance = (toBase) => {
     let score = 0;
     const next = { ...newRunners };
-    const { name: runnerName, number: runnerNumber } = runnerQueue[currentRunnerIdx];
+    const { name: runnerName, number: runnerNumber, playerId: runnerPlayerId } = runnerQueue[currentRunnerIdx];
     const runnerOut = toBase === "out" ? 1 : 0;
     if (toBase === 4) { score = 1; }
     else if (toBase !== "out") {
-      if (toBase === 1) { next.first  = { name: runnerName, number: runnerNumber }; }
-      if (toBase === 2) { next.second = { name: runnerName, number: runnerNumber }; }
-      if (toBase === 3) { next.third  = { name: runnerName, number: runnerNumber }; }
+      if (toBase === 1) { next.first  = { name: runnerName, number: runnerNumber, playerId: runnerPlayerId }; }
+      if (toBase === 2) { next.second = { name: runnerName, number: runnerNumber, playerId: runnerPlayerId }; }
+      if (toBase === 3) { next.third  = { name: runnerName, number: runnerNumber, playerId: runnerPlayerId }; }
     }
-    addScore(score, toBase === 4 && runnerNumber != null ? [runnerNumber] : []);
+    const runnerKey = runnerPlayerId != null ? `pid:${runnerPlayerId}` : runnerNumber != null ? `num:${runnerNumber}` : null;
+    addScore(score, toBase === 4 && runnerKey != null ? [runnerKey] : []);
     const nextIdx = currentRunnerIdx + 1;
     const nextRunnerOuts = pendingRunnerOuts + runnerOut;
     if (nextIdx >= runnerQueue.length) {

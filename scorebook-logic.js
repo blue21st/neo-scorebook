@@ -31,6 +31,7 @@ const calcStatsFromLog = (gameLog, isTop) => {
     half.atBats.forEach(ab => {
       if (!stats[ab.number]) {
         stats[ab.number] = {
+          playerId: ab.playerId ?? null,
           number: ab.number, name: ab.name, order: ab.order, pos: ab.pos,
           pa: 0, atBats: 0, hits: 0, rbi: 0, hr: 0, sb: 0,
           bb: 0, ibb: 0, hbp: 0, so: 0, sac: 0, sf: 0,
@@ -87,8 +88,20 @@ const calcStatsFromLog = (gameLog, isTop) => {
         }
       }
 
-      (ab.runsScoredBy || []).forEach(n => {
-        if (stats[n]) stats[n].run++;
+      (ab.runsScoredBy || []).forEach(v => {
+        let num;
+        if (typeof v === 'string') {
+          if (v.startsWith('num:')) {
+            num = parseInt(v.slice(4));
+          } else if (v.startsWith('pid:')) {
+            const pid = parseInt(v.slice(4));
+            num = Object.keys(stats).find(k => stats[k].playerId == pid);
+            if (num != null) num = parseInt(num);
+          }
+        } else {
+          num = v; // 旧形式（生の背番号整数）
+        }
+        if (num != null && stats[num]) stats[num].run++;
       });
 
       ab.events?.forEach(ev => {
