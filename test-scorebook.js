@@ -46,9 +46,13 @@ async function findByExactText(page, text, tag = '*') {
     await ss('01_home');
 
     // ────────────────────────────
-    // 2. チーム登録確認
+    // 1.5. 選手登録スキップ（デモ用）
     // ────────────────────────────
-    log('\n【2】ホーム画面');
+    log('\n【1.5】テスト用セットアップ');
+    log('  ℹ️ 選手登録はブラウザ手動、または前回のオーダーを使用');
+
+
+
     const setupInput = await page.$('input[placeholder="例：兵庫ライオンズ"]');
     if (setupInput) {
       fail('チーム未登録 → テスト中断（先にブラウザでチームを登録してください）');

@@ -25,7 +25,7 @@
   <script type="text/babel">
     const { useState, useRef, useEffect } = React;
 
-    const APP_VERSION = "v2026.06.27-1";
+    const APP_VERSION = "v2026.07.02-4";
 
     // Supabase接続
     const SUPABASE_URL = "https://zorxexynepvbaajblsfm.supabase.co";
@@ -226,9 +226,9 @@ const makeBat = (player, pitcherNumber = null, pitcherPlayerId = null, runnersAt
   playerId: player.playerId ?? null,
   order: player.order, number: player.number,
   name: player.name, pos: player.pos,
-  pitches: [], events: [], result: null,
+  pitches: [], events: [], pitchEvents: [], result: null,
   runsScored: 0, runsScoredBy: [], scoreAfterA: null, scoreAfterB: null,
-  pitcherNumber, pitcherPlayerId,
+  pitcherNumber, pitcherPlayerId, runnerOuts: 0,
   runnersAtStart, runnersAfter: null,
 });
 
@@ -434,7 +434,7 @@ function HistoryView({ gameLog, teamNameA, teamNameB, substitutions = [], gameSt
                         </span>
                       )}
                       {isInterrupted && (
-                        <span style={{ fontSize:11, color:C.textTer, flexShrink:0 }}>打席中</span>
+                        <span style={{ fontSize:11, color:C.textTer, flexShrink:0 }}>ー</span>
                       )}
                       {scored && (
                         <span style={{ fontSize:11, fontWeight:700, color:"#27AE60", flexShrink:0 }}>+{ab.runsScored}点</span>
@@ -442,16 +442,68 @@ function HistoryView({ gameLog, teamNameA, teamNameB, substitutions = [], gameSt
                       <span style={{ fontSize:10, color:C.textTer, flexShrink:0, display:"inline-block", transform:isOpen?"rotate(180deg)":"rotate(0deg)", transition:"transform 0.15s" }}>▼</span>
                     </div>
 
-                    {/* 展開時：イベントリスト */}
+                    {/* 展開時：ピッチ縦表示 */}
                     {isOpen && (
                       <div style={{ padding:"4px 16px 12px 50px", background: C.bg, borderTop:`1px solid ${C.divider}` }}>
                         {ab.events.length === 0 && ab.pitches.length === 0 && (
                           <span style={{ fontSize:11, color:C.textTer }}>記録なし</span>
                         )}
-                        {ab.events.map((ev, ei) => {
+                        {ab.pitches.length > 0 && (() => {
+                          const pitchLabels = { B:"ボール", 見逃:"見逃し", 空振:"空振り", F:"ファウル", IP:"インプレー", DB:"死球", 振:"振り逃げ", IBB:"故意四球" };
+                          const eventsByPitch = {};
+                          const orphanEvents = [];
+                          (ab.pitchEvents || []).forEach(pe => {
+                            const idx = typeof pe.pitchIdx === "number" ? pe.pitchIdx - 1 : null;
+                            if (idx !== null && idx >= 0 && idx < ab.pitches.length) {
+                              if (!eventsByPitch[idx]) eventsByPitch[idx] = [];
+                              eventsByPitch[idx].push(pe.text);
+                            } else {
+                              orphanEvents.push(pe.text);
+                            }
+                          });
+                          const hasNewEvents = ab.pitchEvents && ab.pitchEvents.length > 0;
+                          const legacyEvents = hasNewEvents ? [] : ab.events;
+                          return (
+                            <>
+                              {ab.pitches.map((p, pi) => {
+                                const evs = eventsByPitch[pi] || [];
+                                const label = pitchLabels[p] || p;
+                                const bc = CHIP[p] || { bg:"#F0F0F0", color:"#666" };
+                                return (
+                                  <div key={pi} style={{ display:"flex", alignItems:"flex-start", gap:8, marginTop:6 }}>
+                                    <div style={{ width:20, height:20, borderRadius:"50%", background:bc.bg, color:bc.color, fontSize:10, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1 }}>
+                                      {pi + 1}
+                                    </div>
+                                    <span style={{ fontSize:12, color:C.textPri, lineHeight:"20px" }}>
+                                      {label}{evs.length > 0 ? `（${evs.join("・")}）` : ""}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                              {orphanEvents.map((ev, ei) => (
+                                <div key={`orp-${ei}`} style={{ display:"flex", alignItems:"flex-start", gap:8, marginTop:6 }}>
+                                  <span style={{ fontSize:10, color:C.textTer, lineHeight:"20px", marginTop:1 }}>✦</span>
+                                  <span style={{ fontSize:12, color:C.textPri, lineHeight:"20px" }}>{ev}</span>
+                                </div>
+                              ))}
+                              {legacyEvents.map((ev, ei) => {
+                                const bc = eventBadgeColor(ev);
+                                return (
+                                  <div key={`leg-${ei}`} style={{ display:"flex", alignItems:"flex-start", gap:8, marginTop:6 }}>
+                                    <div style={{ width:20, height:20, borderRadius:"50%", background:bc.bg, color:bc.color, fontSize:10, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1 }}>
+                                      {ei + 1}
+                                    </div>
+                                    <span style={{ fontSize:12, color:C.textPri, lineHeight:"20px" }}>{ev}</span>
+                                  </div>
+                                );
+                              })}
+                            </>
+                          );
+                        })()}
+                        {ab.pitches.length === 0 && ab.events.map((ev, ei) => {
                           const bc = eventBadgeColor(ev);
                           return (
-                            <div key={ei} style={{ display:"flex", alignItems:"flex-start", gap:8, marginTop:6 }}>
+                            <div key={`ev-${ei}`} style={{ display:"flex", alignItems:"flex-start", gap:8, marginTop:6 }}>
                               <div style={{ width:20, height:20, borderRadius:"50%", background:bc.bg, color:bc.color, fontSize:10, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1 }}>
                                 {ei + 1}
                               </div>
@@ -459,15 +511,6 @@ function HistoryView({ gameLog, teamNameA, teamNameB, substitutions = [], gameSt
                             </div>
                           );
                         })}
-                        {/* 投球チップ */}
-                        {ab.pitches.length > 0 && (
-                          <div style={{ display:"flex", gap:4, flexWrap:"wrap", marginTop:8 }}>
-                            {ab.pitches.map((p, pi) => {
-                              const s = CHIP[p] || { bg:"#F0F0F0", color:"#666", label:p };
-                              return <span key={pi} style={{ fontSize:10, padding:"2px 7px", borderRadius:16, fontWeight:600, background:s.bg, color:s.color }}>{s.label ?? p}</span>;
-                            })}
-                          </div>
-                        )}
                       </div>
                     )}
                   </div>
@@ -627,10 +670,8 @@ function StatsView({ gameLog, teamNameA, teamNameB }) {
         ps.pitches += ab.pitches?.length || 0;
         // アウト（新表記：遊ゴロ・左フライ等、旧表記：ゴロアウト等、三振）
         const isOutP = isOutResult(r);
-        if (isOutP) {
-          const extraOuts = r.includes("トリプルプレー") ? 2 : r.includes("ゲッツー") ? 1 : 0;
-          ps.outs += 1 + extraOuts;
-        }
+        if (isOutP) ps.outs += 1;
+        ps.outs += ab.runnerOuts || 0;
         // 被安打（新旧両表記対応）
         if (["ヒット","セーフティバント","安打","二塁打","三塁打","本塁打","1塁打","2塁打","3塁打","ホームラン"].some(h => r.includes(h))) ps.pHits++;
         // 奪三振
@@ -2056,6 +2097,70 @@ function SubstitutionModal({
 }
 
 // ─────────────────────────────
+// 試合情報編集モーダル
+// ─────────────────────────────
+function GameInfoModal({ gameMeta, oppTeamName, onSave, onClose }) {
+  const [tmpDate,       setTmpDate]       = useState(gameMeta.gameDate);
+  const [tmpType,       setTmpType]       = useState(gameMeta.gameType || "公式戦");
+  const [tmpTournament, setTmpTournament] = useState(gameMeta.tournament || "");
+  const [tmpOpp,        setTmpOpp]        = useState(oppTeamName);
+  const inp = { width:"100%", padding:"10px 12px", borderRadius:10, border:`1.5px solid ${C.divider}`, fontSize:13, color:C.textPri, background:C.bg, outline:"none" };
+  const save = () => {
+    onSave({
+      ...gameMeta,
+      gameDate: tmpDate,
+      gameType: tmpType,
+      tournament: tmpType === "公式戦" ? tmpTournament : "",
+      season: tmpDate ? new Date(tmpDate).getFullYear() : gameMeta.season,
+    }, tmpOpp);
+  };
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:300, display:"flex", alignItems:"flex-end", justifyContent:"center" }}
+      onClick={onClose}>
+      <div onClick={e => e.stopPropagation()}
+        style={{ background:C.card, borderRadius:"20px 20px 0 0", padding:"24px 20px 40px", width:"100%", maxWidth:480 }}>
+        <div style={{ fontSize:15, fontWeight:800, color:C.textPri, marginBottom:20 }}>試合情報を編集</div>
+        <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+          <div>
+            <div style={{ fontSize:11, color:C.textTer, marginBottom:6 }}>試合日</div>
+            <input type="date" value={tmpDate} onChange={e => setTmpDate(e.target.value)} style={inp} />
+          </div>
+          <div>
+            <div style={{ fontSize:11, color:C.textTer, marginBottom:6 }}>相手チーム名</div>
+            <input type="text" value={tmpOpp} onChange={e => setTmpOpp(e.target.value)}
+              placeholder="相手チーム名" style={inp} />
+          </div>
+          <div>
+            <div style={{ fontSize:11, color:C.textTer, marginBottom:6 }}>試合種別</div>
+            <select value={tmpType} onChange={e => setTmpType(e.target.value)} style={inp}>
+              <option value="公式戦">公式戦</option>
+              <option value="練習試合">練習試合</option>
+            </select>
+          </div>
+          {tmpType === "公式戦" && (
+            <div>
+              <div style={{ fontSize:11, color:C.textTer, marginBottom:6 }}>大会名（任意）</div>
+              <input type="text" value={tmpTournament} onChange={e => setTmpTournament(e.target.value)}
+                placeholder="大会名" style={inp} />
+            </div>
+          )}
+        </div>
+        <div style={{ display:"flex", gap:10, marginTop:24 }}>
+          <div onClick={onClose}
+            style={{ flex:1, padding:"12px", borderRadius:12, background:C.bg, border:`1px solid ${C.divider}`, fontSize:13, fontWeight:600, color:C.textSec, cursor:"pointer", textAlign:"center" }}>
+            キャンセル
+          </div>
+          <div onClick={save}
+            style={{ flex:1, padding:"12px", borderRadius:12, background:C.brand, fontSize:13, fontWeight:700, color:C.brandText, cursor:"pointer", textAlign:"center" }}>
+            保存
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────
 // 試合記録
 // ─────────────────────────────
 function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData = null }) {
@@ -2063,12 +2168,14 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
   const [screen, setScreen] = useState("main");
   const [history, setHistory] = useState([]);
 
-  const gameMeta = {
+  const [gameMeta, setGameMeta] = useState(() => ({
     gameDate:   gameOrder?.gameDate   || new Date().toISOString().split("T")[0],
-    gameType:   gameOrder?.gameType   || null,
-    tournament: gameOrder?.tournament || null,
+    gameType:   gameOrder?.gameType   || "公式戦",
+    tournament: gameOrder?.tournament || "",
     season:     gameOrder?.gameDate   ? new Date(gameOrder.gameDate).getFullYear() : new Date().getFullYear(),
-  };
+  }));
+  const [editableOppTeamName, setEditableOppTeamName] = useState(gameOrder?.oppTeamName || TEAM_B);
+  const [showGameInfoModal, setShowGameInfoModal] = useState(false);
 
   const batting = gameOrder?.batting ?? "先攻"; // 先攻=自チームが表で攻撃
   const myLineupRaw  = (gameOrder?.myLineup?.length > 0)
@@ -2076,7 +2183,7 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
     : BATTERS_A;
   const oppLineupRaw = (gameOrder?.oppLineup?.length > 0) ? gameOrder.oppLineup : BATTERS_B;
   const myTeamNameRaw = teamName || TEAM_A;
-  const oppTeamNameRaw = gameOrder?.oppTeamName || TEAM_B;
+  const oppTeamNameRaw = editableOppTeamName;
   // 先攻=自チームが表(A)、後攻=相手が表(A)（試合開始時の基本ラインナップ）
   const baseLineupA = batting === "後攻" ? oppLineupRaw : myLineupRaw;
   const baseLineupB = batting === "後攻" ? myLineupRaw  : oppLineupRaw;
@@ -2211,10 +2318,18 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
   };
 
   const addEvent = (event) => {
-    setGameLog(log => log.map((h, hi) => hi !== currentHalfIdx ? h : {
-      ...h,
-      atBats: h.atBats.map((ab, ai) => ai !== currentAtBatIdx ? ab : { ...ab, events: [...ab.events, event] })
-    }));
+    setGameLog(log => {
+      const curAb = log[currentHalfIdx]?.atBats?.[currentAtBatIdx];
+      const pitchIdx = curAb?.pitches?.length ?? 0;
+      return log.map((h, hi) => hi !== currentHalfIdx ? h : {
+        ...h,
+        atBats: h.atBats.map((ab, ai) => ai !== currentAtBatIdx ? ab : {
+          ...ab,
+          events: [...ab.events, event],
+          pitchEvents: [...(ab.pitchEvents || []), { text: event, pitchIdx }]
+        })
+      });
+    });
   };
 
   const closeCurrentAtBat = (result, runnersAfter = null) => {
@@ -2446,7 +2561,7 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
       showToast(dpLabel);
       setGameLog(log => log.map((h, hi) => hi !== currentHalfIdx ? h : {
         ...h,
-        atBats: h.atBats.map((ab, ai) => ai !== currentAtBatIdx ? ab : { ...ab, runnersAfter: finalRunners })
+        atBats: h.atBats.map((ab, ai) => ai !== currentAtBatIdx ? ab : { ...ab, runnersAfter: finalRunners, runnerOuts: runnerOutCount })
       }));
       setRunners(finalRunners);
       doOut(finalRunners, totalOuts);
@@ -2458,13 +2573,17 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
       showToast(pendingResult?.label ?? "出塁");
       setGameLog(log => log.map((h, hi) => hi !== currentHalfIdx ? h : {
         ...h,
-        atBats: h.atBats.map((ab, ai) => ai !== currentAtBatIdx ? ab : { ...ab, runnersAfter: next })
+        atBats: h.atBats.map((ab, ai) => ai !== currentAtBatIdx ? ab : { ...ab, runnersAfter: next, runnerOuts: runnerOutCount })
       }));
       setRunners(next);
       const baseNumToKey = {1:"first", 2:"second", 3:"third"};
       setLastBatterBase(batterBase ? (baseNumToKey[batterBase] ?? null) : null);
-      setBatterIdx(i => i + 1); resetAtBat();
-      openNextAtBat(undefined, undefined, undefined, undefined, next);
+      if (runnerOutCount > 0) {
+        doOut(next, outs + runnerOutCount, true);
+      } else {
+        setBatterIdx(i => i + 1); resetAtBat();
+        openNextAtBat(undefined, undefined, undefined, undefined, next);
+      }
     }
     setScreen("main");
     setHistory([]);
@@ -2560,16 +2679,18 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
   };
 
   // 試合保存
-  const saveGame = async (status, opts = {}) => {
+  const saveGame = async (status, opts = {}, gameInfoOverride = null) => {
+    const meta = gameInfoOverride?.meta || gameMeta;
+    const opp  = gameInfoOverride?.oppTeam ?? oppTeamName;
     setSaving(true);
     try {
       const payload = {
         team_name: myTeamNameRaw,
-        opponent: oppTeamName,
-        game_date: gameMeta.gameDate,
-        season:    gameMeta.season,
-        game_type: gameMeta.gameType,
-        tournament: gameMeta.tournament || null,
+        opponent: opp,
+        game_date: meta.gameDate,
+        season:    meta.season,
+        game_type: meta.gameType,
+        tournament: meta.tournament || null,
         status,
         score_my: myScore,
         score_opp: oppScore,
@@ -2631,7 +2752,7 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
     let newOuts = 0;
     for (let ai = 0; ai < targetAbIdx; ai++) {
       const r = lastHalf.atBats[ai].result || "";
-      if (isOutResult(r)) newOuts += r.includes("トリプルプレー") ? 3 : r.includes("ゲッツー") ? 2 : 1;
+      newOuts += (isOutResult(r) ? 1 : 0) + (lastHalf.atBats[ai].runnerOuts || 0);
     }
     // targetAb の開始時点のランナー状態を復元（旧フォーマット対応）
     // resultだけ消してpitchesは残す（1球単位で戻れるように）
@@ -2777,7 +2898,7 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
       doOut(nextRunners, undefined, false);
     } else if (action === "牽制セーフ") {
       addEvent(`${baseLabel}ランナー 牽制セーフ`); showToast("牽制セーフ");
-    } else if (action === "WP進塁" || action === "PB進塁") {
+    } else if (action === "WP進塁" || action === "PB進塁" || action === "その他進塁") {
       const runner = runners[base];
       addEvent(`${baseLabel}ランナー #${runner?.number ?? "?"} ${action}`);
       const nextRunners = { ...runners, [base]: null };
@@ -3061,6 +3182,7 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
               { id:"record",  label:"記録",  Icon: PenLine },
               { id:"history", label:"経過",  Icon: ScrollText },
               { id:"stats",   label:"成績",  Icon: BarChart2 },
+              { id:"settings",label:"設定",  Icon: Settings },
             ].map(t => (
               <div key={t.id} onClick={() => setActiveView(t.id)} style={{
                 flex:1, display:"flex", flexDirection:"column", alignItems:"center",
@@ -3084,11 +3206,56 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
           {activeView === "settings" && (
             <div style={{ padding:"24px 14px" }}>
               <div style={{ fontSize:13, fontWeight:700, color:C.textPri, marginBottom:16 }}>設定</div>
+
+              {/* 試合情報 */}
+              <div style={{ padding:"14px", background:C.card, borderRadius:12, border:`1px solid ${C.divider}`, marginBottom:12 }}
+                onClick={() => setShowGameInfoModal(true)}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:C.textPri }}>試合情報</div>
+                  <div style={{ fontSize:12, color:C.brand, fontWeight:600 }}>編集</div>
+                </div>
+                <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+                  <div style={{ display:"flex", gap:8 }}>
+                    <span style={{ fontSize:11, color:C.textTer, width:56 }}>試合日</span>
+                    <span style={{ fontSize:11, color:C.textPri }}>{gameMeta.gameDate}</span>
+                  </div>
+                  <div style={{ display:"flex", gap:8 }}>
+                    <span style={{ fontSize:11, color:C.textTer, width:56 }}>相手</span>
+                    <span style={{ fontSize:11, color:C.textPri }}>{editableOppTeamName || "—"}</span>
+                  </div>
+                  <div style={{ display:"flex", gap:8 }}>
+                    <span style={{ fontSize:11, color:C.textTer, width:56 }}>種別</span>
+                    <span style={{ fontSize:11, color:C.textPri }}>{gameMeta.gameType || "—"}</span>
+                  </div>
+                  {gameMeta.gameType === "公式戦" && gameMeta.tournament && (
+                    <div style={{ display:"flex", gap:8 }}>
+                      <span style={{ fontSize:11, color:C.textTer, width:56 }}>大会名</span>
+                      <span style={{ fontSize:11, color:C.textPri }}>{gameMeta.tournament}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div style={{ padding:"12px 14px", background:C.bg, borderRadius:10, border:`1px solid ${C.divider}` }}>
                 <div style={{ fontSize:11, color:C.textTer, marginBottom:4 }}>バージョン</div>
                 <div style={{ fontSize:13, color:C.textPri }}>{APP_VERSION}</div>
               </div>
             </div>
+          )}
+
+          {/* 試合情報編集モーダル */}
+          {showGameInfoModal && (
+            <GameInfoModal
+              gameMeta={gameMeta}
+              oppTeamName={editableOppTeamName}
+              onSave={(newMeta, newOpp) => {
+                setEditableOppTeamName(newOpp);
+                setGameMeta(newMeta);
+                setShowGameInfoModal(false);
+                saveGame(gameStatus || "in_progress", {}, { meta: newMeta, oppTeam: newOpp });
+              }}
+              onClose={() => setShowGameInfoModal(false)}
+            />
           )}
 
           {/* 記録ビュー */}
@@ -3350,7 +3517,7 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
                 </div>
               </div>
               <div style={{ display:"flex", flexDirection:"column", gap:7, padding:"12px 14px" }}>
-                {selectedBase === lastBatterBase && (
+                {lastBatterBase !== null && (
                   <Btn label="直前のプレーの続きで進塁" bg={C.brandLight} border={C.brand} color={C.brand}
                     disabled={!!(nextBase(selectedBase) && runners[nextBase(selectedBase)])}
                     onClick={() => handleBaseAction("直前プレー進塁")}/>
@@ -3361,6 +3528,7 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
                 <Btn label="盗塁死"    bg="#F5EAEA" border="#8B2020" color="#8B2020" onClick={() => handleBaseAction("盗塁死")}/>
                 <Btn label="WP進塁"    bg="#F1EFE8" border="#9B9A94" color="#3A3A38" onClick={() => handleBaseAction("WP進塁")}/>
                 <Btn label="PB進塁"    bg="#F1EFE8" border="#9B9A94" color="#3A3A38" onClick={() => handleBaseAction("PB進塁")}/>
+                <Btn label="その他進塁" bg="#F1EFE8" border="#9B9A94" color="#3A3A38" onClick={() => handleBaseAction("その他進塁")}/>
                 <Btn label="牽制セーフ" bg="#F1EFE8" border="#9B9A94" color="#3A3A38" onClick={() => handleBaseAction("牽制セーフ")}/>
                 <Btn label="牽制アウト" bg="#F5EAEA" border="#8B2020" color="#8B2020" onClick={() => handleBaseAction("牽制アウト")}/>
               </div>
@@ -3922,8 +4090,8 @@ function SeasonStatsTab({ team }) {
                   ) : (
                     [s.pa, s.atBats, s.hits, s.h2, s.h3, s.hr, s.rbi, s.run, s.bb, s.so, s.sb, s.tb].map((v, vi) => (
                       <div key={vi} style={{ width:CW, textAlign:"center", fontSize:11, flexShrink:0, background:rowBg,
-                        color: dash ? dimColor : [5,6,7,10].includes(vi)&&v>0 ? C.brand : C.textPri,
-                        fontWeight: !dash&&[5,6,7,10].includes(vi)&&v>0 ? 700 : 400 }}>{dash?"-":v}</div>
+                        color: dash ? dimColor : [5,6,7,10,11].includes(vi)&&v>0 ? C.brand : C.textPri,
+                        fontWeight: !dash&&[5,6,7,10,11].includes(vi)&&v>0 ? 700 : 400 }}>{dash?"-":v}</div>
                     ))
                   )}
                 </div>
