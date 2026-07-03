@@ -25,7 +25,7 @@
   <script type="text/babel">
     const { useState, useRef, useEffect } = React;
 
-    const APP_VERSION = "v2026.07.02-4";
+    const APP_VERSION = "v2026.07.02-5";
 
     // Supabase接続
     const SUPABASE_URL = "https://zorxexynepvbaajblsfm.supabase.co";
@@ -2164,7 +2164,10 @@ function GameInfoModal({ gameMeta, oppTeamName, onSave, onClose }) {
 // 試合記録
 // ─────────────────────────────
 function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData = null }) {
-  const [activeView, setActiveView] = useState("record");
+  const [activeView, setActiveView] = useState(() => {
+    const s = resumeData?.status;
+    return (s === "completed" || s === "cold") ? "history" : "record";
+  });
   const [screen, setScreen] = useState("main");
   const [history, setHistory] = useState([]);
 
@@ -3259,7 +3262,76 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
           )}
 
           {/* 記録ビュー */}
-          {activeView === "record" && <>
+          {/* 完了・コールド試合の結果サマリー */}
+          {activeView === "record" && (gameStatus === "completed" || gameStatus === "cold") && (() => {
+            const isWin  = myScore > oppScore;
+            const isDraw = myScore === oppScore;
+            const [resultLabel, resultBg] = isWin
+              ? ["勝　利", "#1B5E20"]
+              : isDraw
+              ? ["引き分け", "#455A64"]
+              : ["敗　戦", "#B71C1C"];
+            const endLabel = gameStatus === "cold" ? "コールド終了" : `${inning}回終了`;
+            return (
+              <div style={{ padding:"24px 16px", display:"flex", flexDirection:"column", gap:14 }}>
+                {/* 勝敗バッジ */}
+                <div style={{ textAlign:"center" }}>
+                  <div style={{ display:"inline-block", padding:"6px 36px", borderRadius:24, background:resultBg, fontSize:17, fontWeight:900, color:"#fff", letterSpacing:"0.15em" }}>
+                    {resultLabel}
+                  </div>
+                  <div style={{ marginTop:6, fontSize:11, color:C.textTer }}>{endLabel}</div>
+                </div>
+                {/* スコア */}
+                <div style={{ background:C.scoreBg, borderRadius:16, padding:"18px 20px" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                    <div>
+                      <div style={{ fontSize:11, color:C.scoreSubText, fontWeight:600, marginBottom:4 }}>{myTeamNameRaw}</div>
+                      <div style={{ fontSize:44, fontWeight:900, color:C.scoreText, lineHeight:1 }}>{myScore}</div>
+                    </div>
+                    <div style={{ textAlign:"center" }}>
+                      <div style={{ fontSize:22, fontWeight:700, color:C.scoreSubText, opacity:0.5 }}>-</div>
+                    </div>
+                    <div style={{ textAlign:"right" }}>
+                      <div style={{ fontSize:11, color:C.scoreSubText, fontWeight:600, marginBottom:4 }}>{oppTeamNameRaw}</div>
+                      <div style={{ fontSize:44, fontWeight:900, color:C.scoreText, lineHeight:1 }}>{oppScore}</div>
+                    </div>
+                  </div>
+                </div>
+                {/* 試合情報 */}
+                <div style={{ padding:"12px 14px", background:C.card, borderRadius:12, border:`1px solid ${C.divider}`, display:"flex", flexDirection:"column", gap:5 }}>
+                  <div style={{ display:"flex", gap:8 }}>
+                    <span style={{ fontSize:11, color:C.textTer, width:52 }}>試合日</span>
+                    <span style={{ fontSize:11, color:C.textPri }}>{gameMeta.gameDate}</span>
+                  </div>
+                  <div style={{ display:"flex", gap:8 }}>
+                    <span style={{ fontSize:11, color:C.textTer, width:52 }}>種別</span>
+                    <span style={{ fontSize:11, color:C.textPri }}>{gameMeta.gameType || "—"}</span>
+                  </div>
+                  {gameMeta.tournament && (
+                    <div style={{ display:"flex", gap:8 }}>
+                      <span style={{ fontSize:11, color:C.textTer, width:52 }}>大会名</span>
+                      <span style={{ fontSize:11, color:C.textPri }}>{gameMeta.tournament}</span>
+                    </div>
+                  )}
+                </div>
+                {/* クイックリンク */}
+                <div style={{ display:"flex", gap:10 }}>
+                  <div onClick={() => setActiveView("history")}
+                    style={{ flex:1, padding:"14px 8px", borderRadius:12, background:C.card, border:`1px solid ${C.divider}`, textAlign:"center", cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:6 }}>
+                    <ScrollText size={20} color={C.textSec} strokeWidth={1.8}/>
+                    <div style={{ fontSize:12, fontWeight:600, color:C.textSec }}>経過を見る</div>
+                  </div>
+                  <div onClick={() => setActiveView("stats")}
+                    style={{ flex:1, padding:"14px 8px", borderRadius:12, background:C.card, border:`1px solid ${C.divider}`, textAlign:"center", cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:6 }}>
+                    <BarChart2 size={20} color={C.textSec} strokeWidth={1.8}/>
+                    <div style={{ fontSize:12, fontWeight:600, color:C.textSec }}>成績を見る</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {activeView === "record" && !(gameStatus === "completed" || gameStatus === "cold") && <>
 
             {/* 戻るバー */}
             <div style={{ padding:"6px 14px", borderBottom:`1px solid ${C.divider}`, display:"flex", alignItems:"center", justifyContent:"space-between", minHeight:38 }}>
