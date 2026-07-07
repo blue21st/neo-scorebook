@@ -25,7 +25,7 @@
   <script type="text/babel">
     const { useState, useRef, useEffect } = React;
 
-    const APP_VERSION = "v2026.07.02-8";
+    const APP_VERSION = "v2026.07.08-11";
 
     // Supabase接続
     const SUPABASE_URL = "https://zorxexynepvbaajblsfm.supabase.co";
@@ -366,14 +366,22 @@ function HistoryView({ gameLog, teamNameA, teamNameB, substitutions = [], gameSt
   }
 
   return (
-    <div style={{ overflowY:"auto", maxHeight:480, background: C.bg }}>
+    <div style={{ overflowY:"auto", maxHeight:480, background: C.bg, paddingBottom:24 }}>
       {gameLog.map((half, hi) => {
         const isAttackA = half.topBottom === "表";
         const teamName = isAttackA ? (teamNameA || "表") : (teamNameB || "裏");
-        const inningRuns = half.atBats.reduce((sum, ab) => sum + (ab.runsScored || 0), 0);
         const halfSubs = substitutions.filter(s =>
           s.inning === half.inning && s.isTop === (half.topBottom === "表")
         );
+
+        // 結果・投球・イベントが全くない空打席を除外
+        const isEmptyAb = (ab) => !ab.result && (!ab.pitches || ab.pitches.length === 0) && (!ab.events || ab.events.length === 0);
+        const visibleAtBats = half.atBats.filter(ab => !isEmptyAb(ab));
+
+        // 有効な打席も交代記録もない半回は丸ごとスキップ
+        if (visibleAtBats.length === 0 && halfSubs.length === 0) return null;
+
+        const inningRuns = half.atBats.reduce((sum, ab) => sum + (ab.runsScored || 0), 0);
 
         // 各打席の開始時アウト数を計算
         let outsAcc = 0;
@@ -407,6 +415,7 @@ function HistoryView({ gameLog, teamNameA, teamNameB, substitutions = [], gameSt
 
             {/* 打席一覧 + 交代記録をインターリーブ */}
             {half.atBats.map((ab, ai) => {
+              if (isEmptyAb(ab)) return null;
               const key = `${hi}-${ai}`;
               const isOpen = expanded[key];
               const outs = outsAtStart[ai];
@@ -545,11 +554,12 @@ function HistoryView({ gameLog, teamNameA, teamNameB, substitutions = [], gameSt
 
       {/* 試合終了バナー */}
       {gameStatus && gameStatus !== "in_progress" && (
-        <div style={{ margin:"8px 14px 16px", padding:"10px 16px", borderRadius:12, background: gameStatus === "completed" ? C.brandLight : "#FFF8E0", border:`1.5px solid ${gameStatus === "completed" ? C.brand : "#C8A000"}`, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
-          <span style={{ fontSize:16 }}>{gameStatus === "completed" ? "✅" : "⚡"}</span>
-          <span style={{ fontSize:13, fontWeight:700, color: gameStatus === "completed" ? C.brand : "#8A6800" }}>
-            {gameStatus === "completed" ? "試合終了" : "コールド / 早期終了"}
+        <div style={{ margin:"16px 14px 20px", display:"flex", alignItems:"center", gap:10 }}>
+          <div style={{ flex:1, height:1, background: gameStatus === "completed" ? C.brand : "#C8A000", opacity:0.4 }}/>
+          <span style={{ fontSize:12, fontWeight:700, color: gameStatus === "completed" ? C.brand : "#8A6800", letterSpacing:"0.05em", whiteSpace:"nowrap" }}>
+            {gameStatus === "completed" ? "✓ 試合終了" : "⚡ コールド終了"}
           </span>
+          <div style={{ flex:1, height:1, background: gameStatus === "completed" ? C.brand : "#C8A000", opacity:0.4 }}/>
         </div>
       )}
     </div>
@@ -777,7 +787,7 @@ function StatsView({ gameLog, teamNameA, teamNameB }) {
         ))}
       </div>
       {stats.pitching.map((ps, i) => {
-        const innings = `${Math.floor(ps.outs / 3)}${ps.outs % 3 > 0 ? "." + (ps.outs % 3) : ""}`;
+        const innings = `${Math.floor(ps.outs / 3)}${["","⅓","⅔"][ps.outs % 3]}`;
         return (
           <div key={i} style={{ padding: "8px 14px", display: "flex", alignItems: "center", borderBottom: `1px solid ${C.divider}` }}>
             <div style={{ flex: 1 }}>
@@ -793,7 +803,7 @@ function StatsView({ gameLog, teamNameA, teamNameB }) {
   );
 
   return (
-    <div style={{ overflowY: "auto", maxHeight: 520 }}>
+    <div style={{ overflowY: "auto", maxHeight: 520, paddingBottom: 24 }}>
       {/* 打者/投手タブ */}
       <div style={{ display: "flex", borderBottom: `1px solid ${C.divider}` }}>
         {[{ id: "batter", label: "打者成績" }, { id: "pitcher", label: "投手成績" }].map(t => (
@@ -833,7 +843,7 @@ const defaultBatterBase = (result) =>
 
 const batterBaseOptions = (_result) => null; // 塁選択UI廃止
 
-function InplayScreen({ batter, onResult }) {
+function InplayScreen({ batter, onResult, balls = 0, strikes = 0, outs = 0, runners = {} }) {
   const [tab, setTab] = useState("inplay"); // inplay | special
   const [dir, setDir] = useState("-");
   const [result, setResult] = useState("-");
@@ -871,10 +881,24 @@ function InplayScreen({ batter, onResult }) {
 
   return (
     <>
-      {/* ヘッダー */}
-      <div style={{ padding:"10px 16px", borderBottom:`1px solid ${C.divider}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-        <span style={{ fontSize:12, color:C.textSec }}>#{batter.number} {batter.name}</span>
-        <span style={{ fontSize:13, fontWeight:600 }}>打席結果を選択</span>
+      {/* ヘッダー：状況コンテキスト */}
+      <div style={{ padding:"8px 16px", borderBottom:`1px solid ${C.divider}`, background:C.scoreBg, display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
+        <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+          {/* BSO */}
+          <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+            {[{l:"B",v:balls,m:3,col:C.bsoB},{l:"S",v:strikes,m:2,col:C.bsoS},{l:"O",v:outs,m:2,col:C.bsoO}].map(r=>(
+              <div key={r.l} style={{ display:"flex", alignItems:"center", gap:3 }}>
+                <span style={{ fontSize:9, fontWeight:700, color:C.scoreSubText }}>{r.l}</span>
+                {Array.from({length:r.m}).map((_,i)=>(
+                  <div key={i} style={{ width:6, height:6, borderRadius:"50%", background: i<r.v ? r.col : "rgba(255,255,255,0.3)" }}/>
+                ))}
+              </div>
+            ))}
+          </div>
+          {/* ミニダイアモンド */}
+          <MiniDiamond runners={runners}/>
+        </div>
+        <span style={{ fontSize:11, color:C.scoreSubText, fontWeight:600 }}>#{batter.number} {batter.name}</span>
       </div>
 
       {/* タブ */}
@@ -1782,6 +1806,7 @@ function OrderRegistration({ onNext, onBack, teamId, initialOrder = null }) {
 
   const handleNext = () => {
     const errors = [];
+    const warnings = [];
 
     // 9人揃っているか（まだ何も設定していない場合を含む）
     if (myLineup.length < 9) {
@@ -1804,15 +1829,15 @@ function OrderRegistration({ onNext, onBack, teamId, initialOrder = null }) {
     if (dupPos.length > 0)
       errors.push(`自チーム：「${dupPos.join('」「')}」が複数の選手に設定されています`);
 
-    // ポジション重複チェック（相手チーム）
+    // ポジション重複チェック（相手チーム）→ 警告のみ（記録開始は可能）
     const oppFilledPos = oppLineup.filter(r => r.pos && r.pos !== '-').map(r => r.pos);
     const oppDupPos = [...new Set(oppFilledPos.filter((p, i) => oppFilledPos.indexOf(p) !== i))];
     if (oppDupPos.length > 0)
-      errors.push(`相手チーム（${oppTeamName || "相手"}）：「${oppDupPos.join('」「')}」が複数の選手に設定されています`);
+      warnings.push(`相手チーム：「${oppDupPos.join('」「')}」が重複しています（このまま記録できます）`);
 
-    if (errors.length > 0) { setOrderErrors(errors); return; }
+    if (errors.length > 0) { setOrderErrors([...errors, ...warnings.map(w => '⚠ ' + w)]); return; }
 
-    setOrderErrors([]);
+    setOrderErrors(warnings.map(w => '⚠ ' + w));
     onNext({ myLineup, myBench, teamId, oppLineup, oppBench, oppTeamName, gameDate, gameType, tournament, batting });
   };
 
@@ -3192,8 +3217,8 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
                 gap:2, padding:"8px 4px", cursor:"pointer", userSelect:"none",
                 borderBottom: activeView===t.id ? `2px solid ${C.brand}` : "2px solid transparent",
               }}>
-                <t.Icon size={16} color={activeView===t.id ? C.brand : C.textTer} strokeWidth={activeView===t.id ? 2.5 : 1.8}/>
-                <span style={{ fontSize:10, fontWeight: activeView===t.id ? 700 : 400, color: activeView===t.id ? C.brand : C.textTer }}>{t.label}</span>
+                <t.Icon size={16} color={activeView===t.id ? C.brand : C.textTer} strokeWidth={2}/>
+                <span style={{ fontSize:10, fontWeight:600, color: activeView===t.id ? C.brand : C.textTer }}>{t.label}</span>
               </div>
             ))}
           </div>
@@ -3455,7 +3480,7 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
                         onPointerUp={e => { e.currentTarget.style.transform=""; e.currentTarget.style.background="#F5F7F5"; }}
                         onPointerLeave={e => { e.currentTarget.style.transform=""; e.currentTarget.style.background="#F5F7F5"; }}
                       >{b.l}</div>
-                      <div style={{ fontSize:10, color: C.textSec, fontWeight:600, whiteSpace:"nowrap" }}>{b.s}</div>
+                      <div style={{ fontSize:12, color: C.textSec, fontWeight:600, whiteSpace:"nowrap" }}>{b.s}</div>
                     </div>
                   ))}
                 </div>
@@ -3476,23 +3501,21 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
               </div>
 
               {/* サブ操作 */}
-              <div style={{ padding:"8px 16px 16px", display:"flex", justifyContent:"center", alignItems:"center", gap:20 }}>
-                <span onClick={openSubModal} style={{ fontSize:11, color: C.brand, fontWeight:600, cursor:"pointer", padding:"4px 10px", borderRadius:20, background:C.brandLight }}>選手交代</span>
-                <span
+              <div style={{ padding:"6px 12px 12px", display:"flex", justifyContent:"center", alignItems:"center", gap:8 }}>
+                <div onClick={openSubModal} style={{ padding:"10px 14px", borderRadius:10, background:C.brandLight, border:`1px solid ${C.brand}`, cursor:"pointer", userSelect:"none" }}>
+                  <span style={{ fontSize:12, color:C.brand, fontWeight:600 }}>選手交代</span>
+                </div>
+                <div
                   onClick={(stateHistory.length > 0 || isEditMode) ? handleUndo : undefined}
-                  style={{
-                    fontSize:11,
-                    cursor: (stateHistory.length > 0 || isEditMode) ? "pointer" : "default",
-                    color: (stateHistory.length > 0 || isEditMode) ? C.textSec : C.textTer,
-                    borderBottom: (stateHistory.length > 0 || isEditMode) ? `1px dashed ${C.textTer}` : "none",
-                  }}
-                >{isEditMode ? "1打席戻す" : "1球取消"}</span>
-                <span style={{ fontSize:11, color: C.textTer, cursor:"pointer" }}>特殊処理</span>
-                <span style={{ width:1, height:10, background:C.divider }}/>
-                <span
+                  style={{ padding:"10px 14px", borderRadius:10, background: (stateHistory.length > 0 || isEditMode) ? C.card : C.bg, border:`1px solid ${(stateHistory.length > 0 || isEditMode) ? C.divider : "transparent"}`, cursor: (stateHistory.length > 0 || isEditMode) ? "pointer" : "default", userSelect:"none" }}>
+                  <span style={{ fontSize:12, color: (stateHistory.length > 0 || isEditMode) ? C.textSec : C.textTer, fontWeight:500 }}>{isEditMode ? "1打席戻す" : "1球取消"}</span>
+                </div>
+                <div style={{ flex:1 }}/>
+                <div
                   onClick={() => { setEndStep("menu"); setShowEndModal(true); }}
-                  style={{ fontSize:11, color:"#C04040", cursor:"pointer", fontWeight:600, borderBottom:"1px solid rgba(192,64,64,0.35)" }}
-                >記録を終了</span>
+                  style={{ padding:"10px 14px", borderRadius:10, background:"#FEF0F0", border:"1px solid rgba(192,64,64,0.35)", cursor:"pointer", userSelect:"none" }}>
+                  <span style={{ fontSize:12, color:"#C04040", fontWeight:700 }}>記録を終了</span>
+                </div>
               </div>
 
               {/* スコアボード */}
@@ -3539,7 +3562,7 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
             </>}
 
             {/* インプレー結果 */}
-            {screen === "inplay" && <InplayScreen batter={batter} onResult={handleInplayResult} onBack={goBack}/>}
+            {screen === "inplay" && <InplayScreen batter={batter} onResult={handleInplayResult} onBack={goBack} balls={balls} strikes={strikes} outs={outs} runners={runners}/>}
 
             {/* 凡退時：進塁した？ */}
             {screen === "askAdvance" && <>
@@ -3764,7 +3787,8 @@ const sRISP = (s) => s.risp_ab === 0 ? "-" : (s.risp_hit / s.risp_ab).toFixed(3)
 function GamesTab({ team, onStartRecord, onStartOrder, onResume, onEdit }) {
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [typeFilter, setTypeFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState(() => localStorage.getItem("nsb_typeFilter_games") || "all");
+  const updateTypeFilter = (v) => { setTypeFilter(v); localStorage.setItem("nsb_typeFilter_games", v); };
   const [deleteConfirm, setDeleteConfirm] = useState(null); // game object to delete
   const [deleting, setDeleting] = useState(false);
   const currentYear = new Date().getFullYear();
@@ -3792,7 +3816,7 @@ function GamesTab({ team, onStartRecord, onStartOrder, onResume, onEdit }) {
     return `${dt.getMonth() + 1}/${dt.getDate()}`;
   };
   const resultLabel = (g) => {
-    if (g.status === "in_progress") return { text: "途", bg: "#E8EAE0", color: C.textSec };
+    if (g.status === "in_progress") return { text: "▶", bg: C.brandLight, color: C.brand };
     if (g.score_my > g.score_opp) return { text: "勝", bg: C.brandLight, color: C.brand };
     if (g.score_my < g.score_opp) return { text: "負", bg: "#FEF0F0", color: "#8B2020" };
     return { text: "分", bg: "#F0F0F0", color: C.textSec };
@@ -3822,7 +3846,7 @@ function GamesTab({ team, onStartRecord, onStartOrder, onResume, onEdit }) {
         {/* 種別フィルター */}
         <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
           {[["all","すべて"], ["公式戦","公式戦"], ["練習試合","練習試合"]].map(([v, label]) => (
-            <div key={v} onClick={() => setTypeFilter(v)}
+            <div key={v} onClick={() => updateTypeFilter(v)}
               style={{ fontSize: 11, padding: "4px 10px", borderRadius: 20, cursor: "pointer", fontWeight: typeFilter === v ? 700 : 400,
                 background: typeFilter === v ? "rgba(255,255,255,0.25)" : "transparent",
                 color: typeFilter === v ? C.scoreText : C.scoreSubText, border: `1px solid ${typeFilter === v ? "rgba(255,255,255,0.5)" : "transparent"}` }}>
@@ -3886,7 +3910,9 @@ function GamesTab({ team, onStartRecord, onStartOrder, onResume, onEdit }) {
                       <div style={{ width: 36, fontSize: 11, color: C.textTer, flexShrink: 0 }}>{fmtDate(g.game_date)}</div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 14, fontWeight: 600, color: C.textPri }}>vs {g.opponent}</div>
-                        {g.game_type && <div style={{ fontSize: 10, color: C.textTer }}>{g.game_type}</div>}
+                        {g.status === "in_progress"
+                          ? <div style={{ fontSize: 10, color: C.brand, fontWeight: 600 }}>▶ タップして続きを入力</div>
+                          : g.game_type && <div style={{ fontSize: 10, color: C.textTer }}>{g.game_type}</div>}
                       </div>
                       <div style={{ fontSize: 15, fontWeight: 800, color: C.textPri, marginRight: 8 }}>{g.score_my} - {g.score_opp}</div>
                       <div style={{ width: 26, height: 26, borderRadius: "50%", background: rl.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -3943,8 +3969,10 @@ function SeasonStatsTab({ team }) {
   const [games, setGames] = useState([]);
   const [allPlayers, setAllPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [typeFilter, setTypeFilter] = useState("all");
-  const [rangeFilter, setRangeFilter] = useState("all"); // "all" | "5" | "10" | "YYYY"
+  const [typeFilter, setTypeFilter] = useState(() => localStorage.getItem("nsb_typeFilter_stats") || "all");
+  const updateTypeFilter = (v) => { setTypeFilter(v); localStorage.setItem("nsb_typeFilter_stats", v); };
+  const [rangeFilter, setRangeFilter] = useState(() => localStorage.getItem("nsb_rangeFilter_stats") || "all");
+  const updateRangeFilter = (v) => { setRangeFilter(v); localStorage.setItem("nsb_rangeFilter_stats", v); };
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [compact, setCompact] = useState(true);
   const currentYear = new Date().getFullYear();
@@ -4076,17 +4104,17 @@ function SeasonStatsTab({ team }) {
         {/* 種別フィルター */}
         <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:6 }}>
           {[["all","すべて"],["公式戦","公式戦"],["練習試合","練習試合"]].map(([v, label]) => (
-            <FilterChip key={v} value={v} label={label} current={typeFilter} onChange={v => { setTypeFilter(v); setRangeFilter("all"); }}/>
+            <FilterChip key={v} value={v} label={label} current={typeFilter} onChange={v => { updateTypeFilter(v); updateRangeFilter("all"); }}/>
           ))}
           <div style={{ marginLeft:"auto", fontSize:11, color:C.scoreSubText }}>{filtered.length}試合</div>
         </div>
         {/* 期間フィルター */}
         <div style={{ display:"flex", gap:6, overflowX:"auto", paddingBottom:2 }}>
-          <FilterChip value="all" label="すべて" current={rangeFilter} onChange={setRangeFilter}/>
-          <FilterChip value="5"   label="直近5試合" current={rangeFilter} onChange={setRangeFilter}/>
-          <FilterChip value="10"  label="直近10試合" current={rangeFilter} onChange={setRangeFilter}/>
+          <FilterChip value="all" label="すべて" current={rangeFilter} onChange={updateRangeFilter}/>
+          <FilterChip value="5"   label="直近5試合" current={rangeFilter} onChange={updateRangeFilter}/>
+          <FilterChip value="10"  label="直近10試合" current={rangeFilter} onChange={updateRangeFilter}/>
           {years.map(y => (
-            <FilterChip key={y} value={String(y)} label={`${y}年`} current={rangeFilter} onChange={setRangeFilter}/>
+            <FilterChip key={y} value={String(y)} label={`${y}年`} current={rangeFilter} onChange={updateRangeFilter}/>
           ))}
         </div>
       </div>
