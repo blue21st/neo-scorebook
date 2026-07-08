@@ -25,7 +25,7 @@
   <script type="text/babel">
     const { useState, useRef, useEffect } = React;
 
-    const APP_VERSION = "v2026.07.08-13";
+    const APP_VERSION = "v2026.07.08-14";
 
     // Supabase接続
     const SUPABASE_URL = "https://zorxexynepvbaajblsfm.supabase.co";
@@ -423,7 +423,24 @@ function HistoryView({ gameLog, teamNameA, teamNameB, substitutions = [], gameSt
 
             {/* 打席一覧 + 交代記録をインターリーブ */}
             {half.atBats.map((ab, ai) => {
-              if (isEmptyAb(ab)) return null;
+              // この打席後に発生した交代（先に取得）
+              const subsAfter = halfSubs.filter(s => s.atBatIdx === ai);
+
+              // 空打席は交代記録だけ表示（打席行自体はスキップ）
+              if (isEmptyAb(ab)) {
+                if (subsAfter.length === 0) return null;
+                return (
+                  <div key={ai}>
+                    {subsAfter.map((s, si) => (
+                      <div key={`sub-${ai}-${si}`} style={{ padding:"7px 16px 7px 44px", borderBottom:`1px solid ${C.divider}`, background:"#FAFAF3", display:"flex", alignItems:"center", gap:6 }}>
+                        <span style={{ fontSize:10, fontWeight:700, color:"#7A6A10", background:"#F0E8B0", padding:"1px 7px", borderRadius:10, flexShrink:0 }}>{s.type}</span>
+                        <span style={{ fontSize:12, color:"#5A5000" }}>{subLine(s)}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              }
+
               const key = `${hi}-${ai}`;
               const isOpen = expanded[key];
               const outs = outsAtStart[ai];
@@ -431,9 +448,6 @@ function HistoryView({ gameLog, teamNameA, teamNameB, substitutions = [], gameSt
               const scored = (ab.runsScored || 0) > 0;
               const badge = resultBadge(ab.result);
               const isInterrupted = !ab.result && (hi < gameLog.length - 1) && ai === half.atBats.length - 1;
-
-              // この打席後に発生した交代
-              const subsAfter = halfSubs.filter(s => s.atBatIdx === ai);
 
               return (
                 <div key={ai}>
