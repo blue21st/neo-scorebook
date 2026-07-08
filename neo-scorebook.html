@@ -25,7 +25,7 @@
   <script type="text/babel">
     const { useState, useRef, useEffect } = React;
 
-    const APP_VERSION = "v2026.07.08-11";
+    const APP_VERSION = "v2026.07.08-13";
 
     // Supabase接続
     const SUPABASE_URL = "https://zorxexynepvbaajblsfm.supabase.co";
@@ -215,8 +215,11 @@ const migrateRunners = (r, names, nums) => {
 };
 
 const SUB_STEPS = {
-  TEAM: "team", TYPE: "type", OUT: "out", IN: "in",
-  POS: "pos", POSSWAP: "posswap", POSSWAP2: "posswap2", CONFIRM: "posswap_confirm",
+  TEAM:"team", LIST:"list",
+  OUT:"out", IN:"in", POS:"pos",
+  PINCH_HIT_IN:"pinch_hit_in", PINCH_HIT_POS:"pinch_hit_pos",
+  PINCH_RUN_BASE:"pinch_run_base", PINCH_RUN_IN:"pinch_run_in",
+  POSSWAP:"posswap", POSSWAP2:"posswap2", CONFIRM:"posswap_confirm",
 };
 
 // OUT_KEYWORDS / NON_OUT_KEYWORDS / isOutResult / isStrikeout / replayBSO は
@@ -354,11 +357,16 @@ function HistoryView({ gameLog, teamNameA, teamNameB, substitutions = [], gameSt
   };
 
   const subLine = (s) => {
-    if (s.type === "ポジションチェンジ")
-      return `守備変更: ${s.outName}・${s.inName} ポジションチェンジ`;
-    if (s.type === "投手交代")
-      return `投手交代: ${s.outName} → ${s.inName}`;
-    return `守備交代: ${s.outName} → ${s.inName}`;
+    switch(s.type) {
+      case "投手交代":       return `投手交代: ${s.outName} → ${s.inName}`;
+      case "代打":           return `${s.outName} →代打: ${s.inName}`;
+      case "代走": {
+        const bl = { first:"一塁", second:"二塁", third:"三塁" }[s.base] ?? "";
+        return `${bl}走者 ${s.outName} →代走: ${s.inName}`;
+      }
+      case "ポジションチェンジ": return `守備変更: ${s.outName}・${s.inName} ポジションチェンジ`;
+      default: return `守備交代: ${s.outName} → ${s.inName}`;
+    }
   };
 
   if (gameLog.length === 0) {
@@ -1941,24 +1949,42 @@ function OrderRegistration({ onNext, onBack, teamId, initialOrder = null }) {
 }
 
 // ─────────────────────────────
-// 守備交代モーダル
+// 選手交代モーダル（代打・代走・守備交代・ポジションチェンジ対応）
 // ─────────────────────────────
 function SubstitutionModal({
   activeBattersA, activeBattersB, benchA, benchB,
-  substitutions,
+  substitutions, runners, batter, isTop: gameIsTop,
   activeTeamA, oppTeamName,
-  subStep, setSubStep, subTeam, setSubTeam, subType, setSubType,
-  subOutSlot, setSubOutSlot, subInPlayer, setSubInPlayer,
-  subNewPos, setSubNewPos, subSwapSlot1, setSubSwapSlot1,
-  onClose, applyDefenseSub, applyPositionChange,
+  subStep, setSubStep, subTeam, setSubTeam,
+  pendingSubs, setPendingSubs,
+  subAddOutSlot, setSubAddOutSlot,
+  subAddInPlayer, setSubAddInPlayer,
+  subAddNewPos, setSubAddNewPos,
+  subAddBase, setSubAddBase,
+  subAddSwapSlot1, setSubAddSwapSlot1,
+  onClose, applyAllSubs,
 }) {
   const subLineup   = subTeam === "top" ? activeBattersA : activeBattersB;
   const subBench    = subTeam === "top" ? benchA : benchB;
   const subTeamName = subTeam === "top" ? activeTeamA : oppTeamName;
   const POSITIONS   = ["投","捕","一","二","三","遊","左","中","右","DH","-"];
-  const playerRow = (p, i, onClick) => (
-    <div key={i} onClick={onClick}
-      style={{ display:"flex", alignItems:"center", padding:"14px 20px", borderBottom:`1px solid ${C.divider}`, cursor:"pointer" }}>
+
+  // 競合チェック: pendingSubs + 過去の substitutions から使用済み情報を収集
+  const usedInNumbers = new Set([
+    ...pendingSubs.filter(s => s.inNumber != null).map(s => s.inNumber),
+    ...(substitutions || []).filter(s => s.inNumber != null).map(s => s.inNumber),
+  ]);
+  const usedOutSlots  = new Set(pendingSubs.filter(s => s.slot != null && s.type !== "ポジションチェンジ").map(s => s.slot));
+  const usedBases     = new Set(pendingSubs.filter(s => s.base).map(s => s.base));
+  const usedSwapSlots = new Set(pendingSubs.filter(s => s.type === "ポジションチェンジ").flatMap(s => [s.slot1, s.slot2]));
+
+  const isAttackingTeam = (gameIsTop && subTeam === "top") || (!gameIsTop && subTeam === "bottom");
+  const hasRunner = runners?.first || runners?.second || runners?.third;
+
+  const playerRow = (p, i, onClick, disabled = false) => (
+    <div key={i} onClick={disabled ? undefined : onClick}
+      style={{ display:"flex", alignItems:"center", padding:"14px 20px", borderBottom:`1px solid ${C.divider}`,
+        cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.35 : 1 }}>
       <div style={{ width:24, height:24, borderRadius:"50%", background:C.brandLight, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginRight:10 }}>
         <span style={{ fontSize:11, fontWeight:800, color:C.brand }}>{p.order}</span>
       </div>
@@ -1967,131 +1993,273 @@ function SubstitutionModal({
       <div style={{ fontSize:11, padding:"2px 8px", background:C.bg, borderRadius:6, color:C.textSec, border:`1px solid ${C.divider}` }}>{p.pos}</div>
     </div>
   );
-  const backBtn = (label, onClick) => (
+
+  const backBtn = (onClick) => (
     <div onClick={onClick} style={{ padding:"12px 0", textAlign:"center", fontSize:13, color:C.textSec, cursor:"pointer" }}>← 戻る</div>
   );
+
+  const posSelectUI = (onConfirm, onBack) => (
+    <div style={{ padding:"0 16px" }}>
+      <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:24, paddingTop:4 }}>
+        {POSITIONS.map(pos => (
+          <div key={pos} onClick={() => setSubAddNewPos(pos)}
+            style={{ padding:"10px 16px", borderRadius:10, fontSize:14, fontWeight:700, cursor:"pointer",
+              background: subAddNewPos === pos ? C.brand : C.bg,
+              color: subAddNewPos === pos ? C.brandText : C.textPri,
+              border:`2px solid ${subAddNewPos === pos ? C.brand : C.divider}` }}>
+            {pos}
+          </div>
+        ))}
+      </div>
+      <div onClick={subAddNewPos ? onConfirm : undefined}
+        style={{ padding:"16px", borderRadius:50, textAlign:"center", fontWeight:700, fontSize:14,
+          background: subAddNewPos ? C.brand : C.divider, color: C.brandText,
+          cursor: subAddNewPos ? "pointer" : "default" }}>
+        リストに追加
+      </div>
+      {backBtn(onBack)}
+    </div>
+  );
+
+  const benchSelectUI = (onSelect, onBack) => {
+    const available = subBench.filter(p => !usedInNumbers.has(p.number));
+    return <>
+      {available.length === 0
+        ? <div style={{ padding:"40px 20px", textAlign:"center", color:C.textSec, fontSize:14 }}>ベンチに選手がいません</div>
+        : available.map((p, i) => (
+            <div key={i} onClick={() => onSelect(p)}
+              style={{ display:"flex", alignItems:"center", padding:"14px 20px", borderBottom:`1px solid ${C.divider}`, cursor:"pointer" }}>
+              <div style={{ width:28, fontSize:11, color:C.textTer }}>#{p.number}</div>
+              <div style={{ flex:1, fontSize:14, fontWeight:600, color:C.textPri }}>{p.name}</div>
+              <div style={{ fontSize:11, padding:"2px 8px", background:C.bg, borderRadius:6, color:C.textSec, border:`1px solid ${C.divider}` }}>{p.pos || "-"}</div>
+            </div>
+          ))
+      }
+      {backBtn(onBack)}
+    </>;
+  };
+
+  const commitAdd = (sub) => {
+    setPendingSubs(s => [...s, sub]);
+    setSubStep(SUB_STEPS.LIST);
+    setSubAddOutSlot(null); setSubAddInPlayer(null);
+    setSubAddNewPos(null); setSubAddBase(null); setSubAddSwapSlot1(null);
+  };
+
+  const stepTitle = () => {
+    switch(subStep) {
+      case SUB_STEPS.TEAM:          return "どちらが交代しますか？";
+      case SUB_STEPS.LIST:          return "交代内容";
+      case SUB_STEPS.OUT:           return "退く選手";
+      case SUB_STEPS.IN:            return "入る選手（ベンチ）";
+      case SUB_STEPS.POS:           return `${subAddInPlayer?.name} のポジション`;
+      case SUB_STEPS.PINCH_HIT_IN:  return "代打の選手（ベンチ）";
+      case SUB_STEPS.PINCH_HIT_POS: return `${subAddInPlayer?.name} のポジション`;
+      case SUB_STEPS.PINCH_RUN_BASE:return "どの走者を交代しますか？";
+      case SUB_STEPS.PINCH_RUN_IN:  return "代走の選手（ベンチ）";
+      case SUB_STEPS.POSSWAP:       return "1人目を選んでください";
+      case SUB_STEPS.POSSWAP2:      return "2人目を選んでください";
+      case SUB_STEPS.CONFIRM:       return "ポジションチェンジ確認";
+      default: return "選手交代";
+    }
+  };
+
+  const pendingLine = (s) => {
+    const bl = { first:"一塁", second:"二塁", third:"三塁" };
+    switch(s.type) {
+      case "代打":           return `${s.outName} →代打: ${s.inName}`;
+      case "代走":           return `${bl[s.base]}走者 ${s.outName} →代走: ${s.inName}`;
+      case "投手交代":       return `投手交代: ${s.outName} → ${s.inName}`;
+      case "ポジションチェンジ": return `${s.outName}(${s.outPos}) ⇄ ${s.inName}(${s.inPos})`;
+      default:               return `守備交代: ${s.outName} → ${s.inName}`;
+    }
+  };
+
+  const typeChip = (type) => {
+    const map = { "代打":"#1565C0", "代走":"#6A1B9A", "投手交代":C.brand, "守備交代":C.brand, "ポジションチェンジ":"#E65100" };
+    return <span style={{ fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:20,
+      background: (map[type]||C.brand)+"22", color: map[type]||C.brand }}>{type}</span>;
+  };
+
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:200, display:"flex", alignItems:"flex-end", justifyContent:"center" }}
       onClick={onClose}>
       <div onClick={e => e.stopPropagation()}
         style={{ background:C.card, borderRadius:"20px 20px 0 0", width:"100%", maxWidth:480, maxHeight:"85vh", display:"flex", flexDirection:"column" }}>
+
+        {/* ヘッダー */}
         <div style={{ padding:"16px 20px 12px", borderBottom:`1px solid ${C.divider}`, display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}>
           <div>
             <div style={{ fontSize:11, color:C.textSec, marginBottom:2 }}>
               {subStep === SUB_STEPS.TEAM ? "選手交代" : subTeamName}
             </div>
-            <div style={{ fontSize:15, fontWeight:800, color:C.textPri }}>
-              {subStep === SUB_STEPS.TEAM    && "どちらが交代しますか？"}
-              {subStep === SUB_STEPS.TYPE    && "種類を選んでください"}
-              {subStep === SUB_STEPS.OUT     && "退く選手"}
-              {subStep === SUB_STEPS.IN      && "入る選手（ベンチ）"}
-              {subStep === SUB_STEPS.POS     && `${subInPlayer?.name} のポジション`}
-              {subStep === SUB_STEPS.POSSWAP && "1人目を選んでください"}
-              {subStep === SUB_STEPS.POSSWAP2 && "2人目を選んでください"}
-              {subStep === SUB_STEPS.CONFIRM && "ポジションチェンジ確認"}
-            </div>
+            <div style={{ fontSize:15, fontWeight:800, color:C.textPri }}>{stepTitle()}</div>
           </div>
           <div onClick={onClose}
             style={{ width:28, height:28, borderRadius:"50%", background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer" }}>
             <X size={16} color={C.textSec}/>
           </div>
         </div>
+
         <div style={{ overflowY:"auto", flex:1, padding:"12px 0 40px" }}>
+
+          {/* チーム選択 */}
           {subStep === SUB_STEPS.TEAM && (
             <div style={{ padding:"0 16px", display:"flex", flexDirection:"column", gap:10 }}>
               {[{ team:"top", label:activeTeamA }, { team:"bottom", label:oppTeamName }].map(({ team, label }) => (
-                <div key={team} onClick={() => { setSubTeam(team); setSubStep(SUB_STEPS.TYPE); }}
+                <div key={team} onClick={() => { setSubTeam(team); setSubStep(SUB_STEPS.LIST); }}
                   style={{ padding:"18px 20px", borderRadius:14, background:C.bg, border:`2px solid ${C.divider}`, cursor:"pointer", fontSize:15, fontWeight:700, color:C.textPri }}>
                   {label}
                 </div>
               ))}
             </div>
           )}
-          {subStep === SUB_STEPS.TYPE && (
-            <div style={{ padding:"0 16px", display:"flex", flexDirection:"column", gap:10 }}>
-              {[
-                { type:"守備交代",        label:"守備交代・投手交代", desc:"ベンチの選手と入れ替える" },
-                { type:"ポジションチェンジ", label:"ポジションチェンジ", desc:"出場中の選手の守備位置を変える" },
-              ].map(({ type, label, desc }) => (
-                <div key={type} onClick={() => { setSubType(type); setSubStep(type === "ポジションチェンジ" ? SUB_STEPS.POSSWAP : SUB_STEPS.OUT); }}
-                  style={{ padding:"16px 20px", borderRadius:14, background:C.bg, border:`2px solid ${C.divider}`, cursor:"pointer" }}>
-                  <div style={{ fontSize:14, fontWeight:700, color:C.textPri }}>{label}</div>
-                  <div style={{ fontSize:12, color:C.textSec, marginTop:4 }}>{desc}</div>
-                </div>
-              ))}
-              {backBtn(null, () => setSubStep(SUB_STEPS.TEAM))}
-            </div>
-          )}
-          {subStep === SUB_STEPS.OUT && <>
-            {subLineup.map((p, i) => playerRow(p, i, () => { setSubOutSlot(i); setSubStep(SUB_STEPS.IN); }))}
-            {backBtn(null, () => setSubStep(SUB_STEPS.TYPE))}
-          </>}
-          {subStep === SUB_STEPS.IN && <>
-            {subBench.length === 0
-              ? <div style={{ padding:"40px 20px", textAlign:"center", color:C.textSec, fontSize:14 }}>ベンチに選手がいません</div>
-              : (() => {
-                  const usedNums = new Set(
-                    (substitutions || [])
-                      .filter(s => s.inNumber != null)
-                      .map(s => s.inNumber)
-                  );
-                  return subBench.map((p, i) => {
-                    const used = usedNums.has(p.number);
-                    return (
-                      <div key={i}
-                        onClick={used ? undefined : () => { setSubInPlayer(p); setSubNewPos(p.pos || "-"); setSubStep(SUB_STEPS.POS); }}
-                        style={{ display:"flex", alignItems:"center", padding:"14px 20px", borderBottom:`1px solid ${C.divider}`,
-                          cursor: used ? "default" : "pointer", opacity: used ? 0.4 : 1 }}>
-                        <div style={{ width:28, fontSize:11, color:C.textTer }}>#{p.number}</div>
-                        <div style={{ flex:1, fontSize:14, fontWeight:600, color:C.textPri }}>{p.name}</div>
-                        <div style={{ fontSize:11, padding:"2px 8px", background:C.bg, borderRadius:6, color:C.textSec, border:`1px solid ${C.divider}` }}>
-                          {used ? "出場済" : (p.pos || "-")}
-                        </div>
-                      </div>
-                    );
-                  });
-                })()
-            }
-            {backBtn(null, () => setSubStep(SUB_STEPS.OUT))}
-          </>}
-          {subStep === SUB_STEPS.POS && (
+
+          {/* 変更リスト */}
+          {subStep === SUB_STEPS.LIST && (
             <div style={{ padding:"0 16px" }}>
-              <div style={{ fontSize:13, color:C.textSec, marginBottom:14, paddingTop:4 }}>
-                {subLineup[subOutSlot]?.order}番 {subLineup[subOutSlot]?.name} → {subInPlayer?.name}
-              </div>
-              <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:24 }}>
-                {POSITIONS.map(pos => (
-                  <div key={pos} onClick={() => setSubNewPos(pos)}
-                    style={{ padding:"10px 16px", borderRadius:10, fontSize:14, fontWeight:700, cursor:"pointer",
-                      background: subNewPos === pos ? C.brand : C.bg,
-                      color: subNewPos === pos ? C.brandText : C.textPri,
-                      border:`2px solid ${subNewPos === pos ? C.brand : C.divider}` }}>
-                    {pos}
+              {pendingSubs.length > 0 && (
+                <div style={{ marginBottom:14 }}>
+                  {pendingSubs.map((s, i) => (
+                    <div key={i} style={{ display:"flex", alignItems:"center", padding:"10px 14px", background:C.bg, borderRadius:10, marginBottom:6, gap:8 }}>
+                      {typeChip(s.type)}
+                      <span style={{ flex:1, fontSize:12, color:C.textPri }}>{pendingLine(s)}</span>
+                      <div onClick={() => setPendingSubs(ps => ps.filter((_, j) => j !== i))}
+                        style={{ cursor:"pointer", padding:"4px", flexShrink:0 }}>
+                        <X size={13} color={C.textTer}/>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:20 }}>
+                {[
+                  { type:"守備交代", desc:"ベンチから守備・投手交代", next: SUB_STEPS.OUT, disabled:false },
+                  { type:"代打",     desc:`現在の打者(${batter?.name})をベンチ選手と交代`, next: SUB_STEPS.PINCH_HIT_IN,  disabled: !isAttackingTeam },
+                  { type:"代走",     desc:"塁上のランナーをベンチ選手と交代",               next: SUB_STEPS.PINCH_RUN_BASE, disabled: !hasRunner },
+                  { type:"ポジションチェンジ", desc:"出場中の選手の守備位置を変える",        next: SUB_STEPS.POSSWAP,        disabled:false },
+                ].map(({ type, desc, next, disabled }) => (
+                  <div key={type} onClick={disabled ? undefined : () => setSubStep(next)}
+                    style={{ padding:"12px 16px", borderRadius:12, background:C.bg, border:`1.5px solid ${C.divider}`,
+                      cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.4 : 1,
+                      display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                    <div>
+                      <div style={{ fontSize:14, fontWeight:700, color:C.textPri }}>＋ {type}</div>
+                      <div style={{ fontSize:11, color:C.textSec, marginTop:2 }}>{desc}</div>
+                    </div>
+                    {!disabled && <ChevronRight size={16} color={C.textTer}/>}
                   </div>
                 ))}
               </div>
-              <div onClick={subNewPos ? applyDefenseSub : undefined}
+
+              <div onClick={pendingSubs.length > 0 ? applyAllSubs : undefined}
                 style={{ padding:"16px", borderRadius:50, textAlign:"center", fontWeight:700, fontSize:14,
-                  background: subNewPos ? C.brand : C.divider,
-                  color: C.brandText, cursor: subNewPos ? "pointer" : "default" }}>
-                交代を確定
+                  background: pendingSubs.length > 0 ? C.brand : C.divider, color: C.brandText,
+                  cursor: pendingSubs.length > 0 ? "pointer" : "default" }}>
+                {pendingSubs.length > 0 ? `${pendingSubs.length}件の交代を確定` : "交代を追加してください"}
               </div>
-              {backBtn(null, () => setSubStep(SUB_STEPS.IN))}
             </div>
           )}
+
+          {/* 守備交代: 退く選手 */}
+          {subStep === SUB_STEPS.OUT && <>
+            {subLineup.map((p, i) => playerRow(p, i, () => { setSubAddOutSlot(i); setSubStep(SUB_STEPS.IN); }, usedOutSlots.has(i) || usedSwapSlots.has(i)))}
+            {backBtn(() => setSubStep(SUB_STEPS.LIST))}
+          </>}
+
+          {/* 守備交代: 入る選手 */}
+          {subStep === SUB_STEPS.IN && benchSelectUI(
+            (p) => { setSubAddInPlayer(p); setSubAddNewPos(p.pos || "-"); setSubStep(SUB_STEPS.POS); },
+            () => setSubStep(SUB_STEPS.OUT)
+          )}
+
+          {/* 守備交代: ポジション */}
+          {subStep === SUB_STEPS.POS && posSelectUI(
+            () => {
+              const outP = subLineup[subAddOutSlot];
+              commitAdd({ type: subAddNewPos === "投" ? "投手交代" : "守備交代",
+                slot: subAddOutSlot,
+                outNumber: outP.number, outName: outP.name,
+                inNumber: subAddInPlayer.number, inName: subAddInPlayer.name,
+                inPlayerId: subAddInPlayer.playerId ?? null, newPos: subAddNewPos });
+            },
+            () => setSubStep(SUB_STEPS.IN)
+          )}
+
+          {/* 代打: 入る選手 */}
+          {subStep === SUB_STEPS.PINCH_HIT_IN && benchSelectUI(
+            (p) => { setSubAddInPlayer(p); setSubAddNewPos(p.pos || "-"); setSubStep(SUB_STEPS.PINCH_HIT_POS); },
+            () => setSubStep(SUB_STEPS.LIST)
+          )}
+
+          {/* 代打: ポジション */}
+          {subStep === SUB_STEPS.PINCH_HIT_POS && posSelectUI(
+            () => commitAdd({ type: "代打",
+              slot: null,
+              outNumber: batter?.number, outName: batter?.name,
+              inNumber: subAddInPlayer.number, inName: subAddInPlayer.name,
+              inPlayerId: subAddInPlayer.playerId ?? null, newPos: subAddNewPos }),
+            () => setSubStep(SUB_STEPS.PINCH_HIT_IN)
+          )}
+
+          {/* 代走: 塁選択 */}
+          {subStep === SUB_STEPS.PINCH_RUN_BASE && (
+            <div style={{ padding:"0 16px", display:"flex", flexDirection:"column", gap:10 }}>
+              {[{ base:"first",label:"一塁",r:runners?.first },{ base:"second",label:"二塁",r:runners?.second },{ base:"third",label:"三塁",r:runners?.third }].map(({ base, label, r }) => {
+                const disabled = !r || usedBases.has(base);
+                return (
+                  <div key={base} onClick={disabled ? undefined : () => { setSubAddBase(base); setSubStep(SUB_STEPS.PINCH_RUN_IN); }}
+                    style={{ padding:"16px 20px", borderRadius:14, background:C.bg, border:`2px solid ${disabled ? C.divider : C.brand}`,
+                      cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.35 : 1,
+                      display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                    <div>
+                      <div style={{ fontSize:14, fontWeight:700, color: disabled ? C.textSec : C.textPri }}>{label}</div>
+                      {r  && <div style={{ fontSize:12, color:C.textSec, marginTop:2 }}>#{r.number} {r.name}</div>}
+                      {!r && <div style={{ fontSize:12, color:C.textTer, marginTop:2 }}>走者なし</div>}
+                    </div>
+                    {!disabled && <ChevronRight size={16} color={C.brand}/>}
+                  </div>
+                );
+              })}
+              {backBtn(() => setSubStep(SUB_STEPS.LIST))}
+            </div>
+          )}
+
+          {/* 代走: 入る選手 */}
+          {subStep === SUB_STEPS.PINCH_RUN_IN && benchSelectUI(
+            (p) => {
+              const runner = runners?.[subAddBase];
+              const outSlot = subLineup.findIndex(lp => lp.number === runner?.number);
+              const inheritedPos = outSlot >= 0 ? subLineup[outSlot].pos : "-";
+              commitAdd({ type: "代走", base: subAddBase,
+                slot: outSlot >= 0 ? outSlot : null,
+                outNumber: runner?.number, outName: runner?.name,
+                inNumber: p.number, inName: p.name,
+                inPlayerId: p.playerId ?? null, newPos: inheritedPos });
+            },
+            () => setSubStep(SUB_STEPS.PINCH_RUN_BASE)
+          )}
+
+          {/* ポジションチェンジ: 1人目 */}
           {subStep === SUB_STEPS.POSSWAP && <>
-            {subLineup.map((p, i) => playerRow(p, i, () => { setSubOutSlot(i); setSubStep(SUB_STEPS.POSSWAP2); }))}
-            {backBtn(null, () => setSubStep(SUB_STEPS.TYPE))}
+            {subLineup.map((p, i) => playerRow(p, i, () => { setSubAddOutSlot(i); setSubStep(SUB_STEPS.POSSWAP2); }, usedSwapSlots.has(i) || usedOutSlots.has(i)))}
+            {backBtn(() => setSubStep(SUB_STEPS.LIST))}
           </>}
+
+          {/* ポジションチェンジ: 2人目 */}
           {subStep === SUB_STEPS.POSSWAP2 && <>
-            {subLineup.map((p, i) => i === subOutSlot ? null :
-              playerRow(p, i, () => { setSubSwapSlot1(i); setSubStep(SUB_STEPS.CONFIRM); })
-            )}
-            {backBtn(null, () => setSubStep(SUB_STEPS.POSSWAP))}
+            {subLineup.map((p, i) => {
+              const disabled = i === subAddOutSlot || usedSwapSlots.has(i) || usedOutSlots.has(i);
+              return playerRow(p, i, () => { setSubAddSwapSlot1(i); setSubStep(SUB_STEPS.CONFIRM); }, disabled);
+            })}
+            {backBtn(() => setSubStep(SUB_STEPS.POSSWAP))}
           </>}
+
+          {/* ポジションチェンジ: 確認 */}
           {subStep === SUB_STEPS.CONFIRM && (() => {
-            const p1 = subLineup[subOutSlot];
-            const p2 = subLineup[subSwapSlot1];
+            const p1 = subLineup[subAddOutSlot];
+            const p2 = subLineup[subAddSwapSlot1];
             return (
               <div style={{ padding:"0 16px" }}>
                 <div style={{ background:C.bg, borderRadius:14, padding:"20px", marginBottom:20, display:"flex", alignItems:"center", gap:12 }}>
@@ -2107,11 +2275,15 @@ function SubstitutionModal({
                     <div style={{ fontSize:13, fontWeight:700, color:C.brand, marginTop:6 }}>{p2?.pos} → {p1?.pos}</div>
                   </div>
                 </div>
-                <div onClick={applyPositionChange}
+                <div onClick={() => commitAdd({ type:"ポジションチェンジ",
+                    slot1: subAddOutSlot, slot2: subAddSwapSlot1,
+                    outNumber: p1.number, outName: p1.name, outPos: p1.pos,
+                    inNumber: p2.number, inName: p2.name, inPos: p2.pos,
+                    newPos: null, base: null })}
                   style={{ padding:"16px", borderRadius:50, background:C.brand, color:C.brandText, fontWeight:700, fontSize:14, textAlign:"center", cursor:"pointer" }}>
-                  ポジションチェンジを確定
+                  リストに追加
                 </div>
-                {backBtn(null, () => setSubStep(SUB_STEPS.POSSWAP2))}
+                {backBtn(() => setSubStep(SUB_STEPS.POSSWAP2))}
               </div>
             );
           })()}
@@ -2258,11 +2430,12 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
   const [showSubModal,   setShowSubModal]   = useState(false);
   const [subStep,        setSubStep]        = useState(SUB_STEPS.TEAM);
   const [subTeam,        setSubTeam]        = useState("top"); // "top"=先攻, "bottom"=後攻
-  const [subType,        setSubType]        = useState("守備交代");
-  const [subOutSlot,     setSubOutSlot]     = useState(null);
-  const [subInPlayer,    setSubInPlayer]    = useState(null);
-  const [subNewPos,      setSubNewPos]      = useState(null);
-  const [subSwapSlot1,   setSubSwapSlot1]   = useState(null);
+  const [pendingSubs,    setPendingSubs]    = useState([]);
+  const [subAddOutSlot,  setSubAddOutSlot]  = useState(null);
+  const [subAddInPlayer, setSubAddInPlayer] = useState(null);
+  const [subAddNewPos,   setSubAddNewPos]   = useState(null);
+  const [subAddBase,     setSubAddBase]     = useState(null);
+  const [subAddSwapSlot1,setSubAddSwapSlot1]= useState(null);
 
   // 選手交代
   const [currentLineupA,  setCurrentLineupA]  = useState(rd?.currentLineupA  || null);
@@ -2640,56 +2813,74 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
   };
 
   const openSubModal = () => {
-    setSubStep(SUB_STEPS.TEAM); setSubTeam("top"); setSubType("守備交代");
-    setSubOutSlot(null); setSubInPlayer(null); setSubNewPos(null); setSubSwapSlot1(null);
+    setSubStep(SUB_STEPS.TEAM); setSubTeam("top");
+    setPendingSubs([]); setSubAddOutSlot(null); setSubAddInPlayer(null);
+    setSubAddNewPos(null); setSubAddBase(null); setSubAddSwapSlot1(null);
     setShowSubModal(true);
   };
 
-  const applyDefenseSub = () => {
+  const applyAllSubs = () => {
     saveSnapshot();
     const isA = subTeam === "top";
-    const currentLineup = isA ? activeBattersA : activeBattersB;
-    const outPlayer = currentLineup[subOutSlot];
-    const newPos = subNewPos || subInPlayer.pos || "-";
-    const newLineup = currentLineup.map((p, i) =>
-      i === subOutSlot ? { ...p, number: subInPlayer.number, name: subInPlayer.name, pos: newPos } : p
-    );
+    let newLineup = [...(isA ? activeBattersA : activeBattersB)];
+    let newRunners = { ...runners };
+    const newSubRecords = [];
+    for (const sub of pendingSubs) {
+      if (sub.type === "代走") {
+        newRunners = { ...newRunners, [sub.base]: { name: sub.inName, number: sub.inNumber, playerId: sub.inPlayerId ?? null } };
+        if (sub.slot != null) {
+          newLineup = newLineup.map((p, i) =>
+            i === sub.slot ? { ...p, number: sub.inNumber, name: sub.inName, pos: sub.newPos, playerId: sub.inPlayerId ?? null } : p
+          );
+        }
+      } else if (sub.type === "ポジションチェンジ") {
+        const pos1 = newLineup[sub.slot1].pos;
+        const pos2 = newLineup[sub.slot2].pos;
+        newLineup = newLineup.map((p, i) => {
+          if (i === sub.slot1) return { ...p, pos: pos2 };
+          if (i === sub.slot2) return { ...p, pos: pos1 };
+          return p;
+        });
+      } else {
+        const slot = sub.slot ?? newLineup.findIndex(p => p.number === sub.outNumber);
+        if (slot >= 0) {
+          newLineup = newLineup.map((p, i) =>
+            i === slot ? { ...p, number: sub.inNumber, name: sub.inName, pos: sub.newPos, playerId: sub.inPlayerId ?? null } : p
+          );
+        }
+      }
+      newSubRecords.push({
+        inning, isTop, type: sub.type,
+        outs, balls, strikes,
+        atBatIdx: currentAtBatIdx,
+        slot: sub.slot ?? null, base: sub.base ?? null,
+        slot1: sub.slot1 ?? null, slot2: sub.slot2 ?? null,
+        outNumber: sub.outNumber, outName: sub.outName,
+        inNumber: sub.inNumber, inName: sub.inName,
+        newPos: sub.newPos ?? null,
+        runnersSnapshot: { ...runners },
+      });
+    }
     if (isA) setCurrentLineupA(newLineup); else setCurrentLineupB(newLineup);
-    setSubstitutions(s => [...s, {
-      inning, isTop, slot: subOutSlot,
-      type: newPos === "投" ? "投手交代" : "守備交代",
-      outs, balls, strikes,
-      atBatIdx: currentAtBatIdx,
-      outNumber: outPlayer.number, outName: outPlayer.name,
-      inNumber: subInPlayer.number, inName: subInPlayer.name,
-      runnersSnapshot: { ...runners },
-    }]);
-    showToast(`${subInPlayer.name}が出場`);
-    setShowSubModal(false);
-  };
-
-  const applyPositionChange = () => {
-    saveSnapshot();
-    const isA = subTeam === "top";
-    const currentLineup = isA ? activeBattersA : activeBattersB;
-    const p1 = currentLineup[subOutSlot];
-    const p2 = currentLineup[subSwapSlot1];
-    const newLineup = currentLineup.map((p, i) => {
-      if (i === subOutSlot)   return { ...p, pos: p2.pos };
-      if (i === subSwapSlot1) return { ...p, pos: p1.pos };
-      return p;
-    });
-    if (isA) setCurrentLineupA(newLineup); else setCurrentLineupB(newLineup);
-    setSubstitutions(s => [...s, {
-      inning, isTop, slot: null, type: "ポジションチェンジ",
-      outs, balls, strikes,
-      atBatIdx: currentAtBatIdx,
-      slot1: subOutSlot, slot2: subSwapSlot1,
-      outNumber: p1.number, outName: p1.name,
-      inNumber:  p2.number, inName:  p2.name,
-      runnersSnapshot: null,
-    }]);
-    showToast("ポジションチェンジ");
+    setRunners(newRunners);
+    const pinchHit = pendingSubs.find(s => s.type === "代打");
+    if (pinchHit) {
+      setGameLog(log => log.map((h, hi) =>
+        hi !== currentHalfIdx ? h : {
+          ...h,
+          atBats: h.atBats.map((ab, ai) =>
+            ai !== currentAtBatIdx ? ab : {
+              ...ab, number: pinchHit.inNumber, name: pinchHit.inName,
+              playerId: pinchHit.inPlayerId ?? null, pos: pinchHit.newPos,
+            }
+          )
+        }
+      ));
+    }
+    setSubstitutions(s => [...s, ...newSubRecords]);
+    const names = pendingSubs.map(s => s.inName).join("、");
+    showToast(`${names}が出場`);
+    setPendingSubs([]);
     setShowSubModal(false);
   };
 
@@ -3022,17 +3213,18 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
             activeBattersA={activeBattersA} activeBattersB={activeBattersB}
             benchA={benchA} benchB={benchB}
             substitutions={substitutions}
+            runners={runners} batter={batter} isTop={isTop}
             activeTeamA={activeTeamA} oppTeamName={oppTeamName}
             subStep={subStep} setSubStep={setSubStep}
             subTeam={subTeam} setSubTeam={setSubTeam}
-            subType={subType} setSubType={setSubType}
-            subOutSlot={subOutSlot} setSubOutSlot={setSubOutSlot}
-            subInPlayer={subInPlayer} setSubInPlayer={setSubInPlayer}
-            subNewPos={subNewPos} setSubNewPos={setSubNewPos}
-            subSwapSlot1={subSwapSlot1} setSubSwapSlot1={setSubSwapSlot1}
-            onClose={() => setShowSubModal(false)}
-            applyDefenseSub={applyDefenseSub}
-            applyPositionChange={applyPositionChange}
+            pendingSubs={pendingSubs} setPendingSubs={setPendingSubs}
+            subAddOutSlot={subAddOutSlot} setSubAddOutSlot={setSubAddOutSlot}
+            subAddInPlayer={subAddInPlayer} setSubAddInPlayer={setSubAddInPlayer}
+            subAddNewPos={subAddNewPos} setSubAddNewPos={setSubAddNewPos}
+            subAddBase={subAddBase} setSubAddBase={setSubAddBase}
+            subAddSwapSlot1={subAddSwapSlot1} setSubAddSwapSlot1={setSubAddSwapSlot1}
+            onClose={() => { setShowSubModal(false); setPendingSubs([]); }}
+            applyAllSubs={applyAllSubs}
           />
         )}
 
@@ -4190,8 +4382,8 @@ function SeasonStatsTab({ team }) {
                   ) : (
                     [s.pa, s.atBats, s.hits, s.h2, s.h3, s.hr, s.rbi, s.run, s.bb, s.so, s.sb, s.tb].map((v, vi) => (
                       <div key={vi} style={{ width:CW, textAlign:"center", fontSize:11, flexShrink:0, background:rowBg,
-                        color: dash ? dimColor : [5,6,7,10,11].includes(vi)&&v>0 ? C.brand : C.textPri,
-                        fontWeight: !dash&&[5,6,7,10,11].includes(vi)&&v>0 ? 700 : 400 }}>{dash?"-":v}</div>
+                        color: dash ? dimColor : [5,6,7,10].includes(vi)&&v>0 ? C.brand : C.textPri,
+                        fontWeight: !dash&&[5,6,7,10].includes(vi)&&v>0 ? 700 : 400 }}>{dash?"-":v}</div>
                     ))
                   )}
                 </div>
