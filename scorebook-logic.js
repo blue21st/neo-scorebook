@@ -9,6 +9,24 @@ const NON_OUT_KEYWORDS = ["ヒット","セーフティバント","安打","振�
 const isOutResult  = (r) =>
   OUT_KEYWORDS.some(x => r.includes(x)) && !NON_OUT_KEYWORDS.some(x => r.includes(x));
 const isStrikeout  = (r) => r.includes("三振") || r.includes("振り逃げ");
+// 併殺打: 新ラベルは「遊併殺打」等、旧ログ・トーストは「ゲッツー」
+const isDoublePlay = (r) => !!r && (r.includes("併殺打") || r.includes("ゲッツー"));
+const isTriplePlay = (r) => !!r && r.includes("トリプルプレー");
+
+// 打席中の走者アウト数。新形式は runnerOuts フィールドを持つ。
+// 旧形式（DB保存済みログ）はフィールドがないため結果文字列から推定する
+const atBatRunnerOuts = (ab) => {
+  if (ab.runnerOuts != null) return ab.runnerOuts;
+  const r = ab.result || "";
+  return isTriplePlay(r) ? 2 : isDoublePlay(r) ? 1 : 0;
+};
+
+// 打席全体で増えるアウト数（打者アウト + 走者アウト）
+const countAtBatOuts = (ab) => {
+  const r = ab.result || "";
+  const batterOut = r && isOutResult(r) ? 1 : 0;
+  return batterOut + atBatRunnerOuts(ab);
+};
 
 const replayBSO = (pitches) => {
   let b = 0, s = 0;
@@ -81,7 +99,7 @@ const calcStatsFromLog = (gameLog, isTop) => {
 
       const runs = ab.runsScored || 0;
       if (runs > 0) {
-        const isDP = r.includes("ゲッツー");
+        const isDP = isDoublePlay(r);
         if (!isDP) {
           if ((isBB || isIBB || isHBP) && rs.first && rs.second && rs.third) s.rbi += 1;
           else if (!isBB && !isIBB && !isHBP) s.rbi += runs;
@@ -135,10 +153,8 @@ const calcStatsFromLog = (gameLog, isTop) => {
       }
       const ps = pitcherStats[ab.pitcherNumber];
       ps.pitches += ab.pitches?.length || 0;
-      if (isOutResult(r)) {
-        const extra = r.includes("トリプルプレー") ? 2 : r.includes("ゲッツー") ? 1 : 0;
-        ps.outs += 1 + extra;
-      }
+      // 打者アウト + 走者アウト（新形式は runnerOuts、旧形式はゲッツー等の文字列から推定）
+      ps.outs += countAtBatOuts(ab);
       if (["ヒット","セーフティバント","安打","二塁打","三塁打","本塁打","1塁打","2塁打","3塁打","ホームラン"].some(h => r.includes(h))) ps.pHits++;
       if (isStrikeout(r)) ps.strikeouts++;
       if (r.includes("フォアボール")) ps.walks++;
@@ -161,5 +177,10 @@ const calcScoreFromLog = (gameLog) => ({
 
 // CommonJS export（Node.js テスト用）
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { OUT_KEYWORDS, NON_OUT_KEYWORDS, isOutResult, isStrikeout, replayBSO, calcStatsFromLog, calcScoreFromLog };
+  module.exports = {
+    OUT_KEYWORDS, NON_OUT_KEYWORDS,
+    isOutResult, isStrikeout, isDoublePlay, isTriplePlay,
+    atBatRunnerOuts, countAtBatOuts,
+    replayBSO, calcStatsFromLog, calcScoreFromLog,
+  };
 }

@@ -25,7 +25,7 @@
   <script type="text/babel">
     const { useState, useRef, useEffect } = React;
 
-    const APP_VERSION = "v2026.07.08-14";
+    const APP_VERSION = "v2026.07.16-1";
 
     // Supabase接続
     const SUPABASE_URL = "https://zorxexynepvbaajblsfm.supabase.co";
@@ -222,7 +222,8 @@ const SUB_STEPS = {
   POSSWAP:"posswap", POSSWAP2:"posswap2", CONFIRM:"posswap_confirm",
 };
 
-// OUT_KEYWORDS / NON_OUT_KEYWORDS / isOutResult / isStrikeout / replayBSO は
+// OUT_KEYWORDS / NON_OUT_KEYWORDS / isOutResult / isStrikeout / isDoublePlay / isTriplePlay /
+// atBatRunnerOuts / countAtBatOuts / replayBSO / calcStatsFromLog / calcScoreFromLog は
 // scorebook-logic.js でグローバルに定義済み
 
 const makeBat = (player, pitcherNumber = null, pitcherPlayerId = null, runnersAtStart = { ...RUNNERS_INIT }) => ({
@@ -323,14 +324,6 @@ function HistoryView({ gameLog, teamNameA, teamNameB, substitutions = [], gameSt
     return `${outStr}${occ.join("")}塁`;
   };
 
-  const countOutsFromResult = (result) => {
-    if (!result) return 0;
-    if (result.includes("ゲッツー")) return 2;
-    if (result.includes("トリプルプレー")) return 3;
-    if (isOutResult(result) && !result.includes("振り逃げ")) return 1;
-    return 0;
-  };
-
   const resultBadge = (result) => {
     if (!result) return null;
     if (result === "送りバント") return { bg:"#F3E5F5", color:"#6A1B9A" };
@@ -391,11 +384,11 @@ function HistoryView({ gameLog, teamNameA, teamNameB, substitutions = [], gameSt
 
         const inningRuns = half.atBats.reduce((sum, ab) => sum + (ab.runsScored || 0), 0);
 
-        // 各打席の開始時アウト数を計算
+        // 各打席の開始時アウト数を計算（打者アウト + 走者アウト）
         let outsAcc = 0;
         const outsAtStart = half.atBats.map(ab => {
           const o = outsAcc;
-          outsAcc += countOutsFromResult(ab.result);
+          outsAcc += countAtBatOuts(ab);
           return o;
         });
 
@@ -594,134 +587,8 @@ const isPitcher = (pos) => pos === "ピッチャー" || pos === "投";
 function StatsView({ gameLog, teamNameA, teamNameB }) {
   const [tab, setTab] = useState("batter");
 
-  // gameLogから打者・投手成績を集計
-  const calcStats = (isTop) => {
-    // gameLog から全選手を自動収集（交代選手も含む）
-    const stats = {};
-    gameLog.forEach(half => {
-      if ((half.topBottom === "表") !== isTop) return;
-      half.atBats.forEach(ab => {
-        if (!stats[ab.number]) {
-          stats[ab.number] = {
-            number: ab.number, name: ab.name, order: ab.order, pos: ab.pos,
-            pa: 0, atBats: 0, hits: 0, rbi: 0, hr: 0, sb: 0,
-            bb: 0, hbp: 0, so: 0, sac: 0,
-          };
-        } else if (stats[ab.number].order === 99 || stats[ab.number].name === `#${ab.number}`) {
-          // 盗塁スタブとして先に作られた場合は実際の打席情報で上書き
-          stats[ab.number].name  = ab.name;
-          stats[ab.number].order = ab.order;
-          stats[ab.number].pos   = ab.pos;
-        }
-        const s = stats[ab.number];
-        const r = ab.result;
-        if (!r) return;
-
-        // 打者成績
-        const isHit = ["ヒット","セーフティバント","安打","二塁打","三塁打","本塁打","1塁打","2塁打","3塁打","ホームラン"].some(h => r.includes(h));
-        const isSF  = r.includes("犠飛");
-        const isSAC = !isHit && (r.includes("犠打") || r.includes("バント"));
-        const isIBB = r.includes("故意四球");
-        const isBB  = r.includes("フォアボール") && !isIBB;
-        const isAB  = !isSF && !isSAC && !isBB && !isIBB && !r.includes("デッドボール");
-        s.pa++;
-        if (isAB) s.atBats++;
-        if (isHit) s.hits++;
-        if (r.includes("本塁打") || r.includes("ホームラン")) s.hr++;
-        if (isBB) s.bb++;
-        if (isIBB) s.ibb = (s.ibb||0) + 1;
-        if (r.includes("デッドボール")) s.hbp++;
-        if (isStrikeout(r)) s.so++;
-        if (isSF)  s.sf  = (s.sf||0)  + 1;
-        if (isSAC) s.sac = (s.sac||0) + 1;
-
-        // 安打種別・塁打数
-        const isH2 = r.includes("二塁打") || r.includes("2塁打");
-        const isH3 = r.includes("三塁打") || r.includes("3塁打");
-        const isHR = r.includes("本塁打") || r.includes("ホームラン");
-        const isH1 = isHit && !isH2 && !isH3 && !isHR;
-        if (isH1) { s.h1 = (s.h1||0) + 1; s.tb = (s.tb||0) + 1; }
-        if (isH2) { s.h2 = (s.h2||0) + 1; s.tb = (s.tb||0) + 2; }
-        if (isH3) { s.h3 = (s.h3||0) + 1; s.tb = (s.tb||0) + 3; }
-        if (isHR) { s.tb = (s.tb||0) + 4; }
-
-        // 得点圏打席・得点圏安打（runnersAtStartに2塁か3塁があれば得点圏）
-        const rs = ab.runnersAtStart || {};
-        if (rs.second || rs.third) {
-          s.risp_ab  = (s.risp_ab||0)  + (isAB ? 1 : 0);
-          s.risp_hit = (s.risp_hit||0) + (isHit ? 1 : 0);
-        }
-
-        // 打点計算（公認野球規則 9.04準拠）
-        const runs = ab.runsScored || 0;
-        if (runs > 0) {
-          const isHBP = r.includes("デッドボール");
-          const isDP  = r.includes("ゲッツー");
-          if (isDP) {
-            // ゲッツー完成時は打点なし
-          } else if ((isBB || isIBB || isHBP) && rs.first && rs.second && rs.third) {
-            // 四球・死球・故意四球は満塁押し出し時のみ打点1
-            s.rbi += 1;
-          } else if (!isBB && !isIBB && !isHBP) {
-            s.rbi += runs;
-          }
-        }
-
-        // 走塁イベントから盗塁（ランナー本人に帰属）
-        ab.events?.forEach(ev => {
-          const m = ev.match(/ランナー .+?\(#(\d+)\) 盗塁成功/) || ev.match(/ランナー #(\d+) 盗塁成功/);
-          if (!m) return;
-          const rn = parseInt(m[1]);
-          if (!stats[rn]) {
-            stats[rn] = { number: rn, name: `#${rn}`, order: 99, pos: "-",
-              pa: 0, atBats: 0, hits: 0, rbi: 0, hr: 0, sb: 0, bb: 0, hbp: 0, so: 0, sac: 0 };
-          }
-          stats[rn].sb++;
-        });
-      });
-    });
-
-    // 投手成績（相手の攻撃イニングを集計）
-    // 自チームの選手情報をレジストリ化（投手名の参照用）
-    const teamRegistry = {};
-    Object.values(stats).forEach(p => { teamRegistry[p.number] = p; });
-
-    const pitcherStats = {};
-    gameLog.forEach(half => {
-      if ((half.topBottom === "表") === isTop) return; // 相手の攻撃のみ
-      half.atBats.forEach(ab => {
-        const r = ab.result;
-        if (!r || !ab.pitcherNumber) return;
-        if (!pitcherStats[ab.pitcherNumber]) {
-          const info = teamRegistry[ab.pitcherNumber]
-            || { number: ab.pitcherNumber, name: `#${ab.pitcherNumber}`, order: 99, pos: "投" };
-          pitcherStats[ab.pitcherNumber] = { ...info, pitches: 0, outs: 0, pHits: 0, strikeouts: 0, walks: 0, pHbp: 0, runs: 0 };
-        }
-        const ps = pitcherStats[ab.pitcherNumber];
-        // 投球数
-        ps.pitches += ab.pitches?.length || 0;
-        // アウト（新表記：遊ゴロ・左フライ等、旧表記：ゴロアウト等、三振）
-        const isOutP = isOutResult(r);
-        if (isOutP) ps.outs += 1;
-        ps.outs += ab.runnerOuts || 0;
-        // 被安打（新旧両表記対応）
-        if (["ヒット","セーフティバント","安打","二塁打","三塁打","本塁打","1塁打","2塁打","3塁打","ホームラン"].some(h => r.includes(h))) ps.pHits++;
-        // 奪三振
-        if (isStrikeout(r)) ps.strikeouts++;
-        // 与四球
-        if (r.includes("フォアボール")) ps.walks++;
-        // 与死球
-        if (r.includes("デッドボール")) ps.pHbp++;
-        // 失点（得点が入った打席の投手に加算）
-        ps.runs += ab.runsScored || 0;
-      });
-    });
-
-    return {
-      batting: Object.values(stats).sort((a, b) => a.order - b.order),
-      pitching: Object.values(pitcherStats),
-    };
-  };
+  // gameLogから打者・投手成績を集計（実装は scorebook-logic.js の calcStatsFromLog に一本化）
+  const calcStats = (isTop) => calcStatsFromLog(gameLog, isTop);
 
   const statsA = React.useMemo(() => calcStats(true),  [gameLog]);
   const statsB = React.useMemo(() => calcStats(false), [gameLog]);
@@ -2731,7 +2598,7 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
       setPendingResult(result); setPendingBatterBase(null); setPendingIsOut(true);
       setNewRunners({ ...RUNNERS_INIT });
       setPendingRunnerOuts(0); setCurrentRunnerIdx(0); setRunnerQueue(queue);
-      if (queue.length === 0) { finishAtBat(true, null, { ...RUNNERS_INIT }, { first: null, second: null, third: null }, 0, {}); }
+      if (queue.length === 0) { finishAtBat(true, null, { ...RUNNERS_INIT }, 0); }
       else { setScreen("runnerAdvance"); setHistory(h => [...h, "inplay"]); }
       return;
     }
@@ -2744,6 +2611,8 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
     else setScreen("runnerAdvance");
   };
 
+  const BASE_NUM_TO_KEY = { 1: "first", 2: "second", 3: "third" };
+
   const handleRunnerAdvance = (toBase) => {
     let score = 0;
     const next = { ...newRunners };
@@ -2751,6 +2620,8 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
     const runnerOut = toBase === "out" ? 1 : 0;
     if (toBase === 4) { score = 1; }
     else if (toBase !== "out") {
+      // 先に確定したランナーがいる塁は選べない（上書きで前のランナーが消えるのを防ぐ）
+      if (next[BASE_NUM_TO_KEY[toBase]]) { setAlert("その塁にはすでにランナーがいます"); return; }
       if (toBase === 1) { next.first  = { name: runnerName, number: runnerNumber, playerId: runnerPlayerId }; }
       if (toBase === 2) { next.second = { name: runnerName, number: runnerNumber, playerId: runnerPlayerId }; }
       if (toBase === 3) { next.third  = { name: runnerName, number: runnerNumber, playerId: runnerPlayerId }; }
@@ -2791,8 +2662,7 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
         atBats: h.atBats.map((ab, ai) => ai !== currentAtBatIdx ? ab : { ...ab, runnersAfter: next, runnerOuts: runnerOutCount })
       }));
       setRunners(next);
-      const baseNumToKey = {1:"first", 2:"second", 3:"third"};
-      setLastBatterBase(batterBase ? (baseNumToKey[batterBase] ?? null) : null);
+      setLastBatterBase(batterBase ? (BASE_NUM_TO_KEY[batterBase] ?? null) : null);
       if (runnerOutCount > 0) {
         doOut(next, outs + runnerOutCount, true);
       } else {
@@ -2816,6 +2686,7 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
     const queue = buildRunnerQueue(runners);
     setPendingResult({ label:"振り逃げ", type:"safe" });
     setPendingBatterBase(1); setPendingIsOut(false);
+    setPendingRunnerOuts(0); // 前回の走者アウト数を引き継がない
     setNewRunners({ ...RUNNERS_INIT }); setCurrentRunnerIdx(0); setRunnerQueue(queue);
     if (queue.length === 0) {
       handleWalk("振り逃げ");
@@ -2981,11 +2852,10 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
     const targetAb      = lastHalf.atBats[targetAbIdx];
     if (!targetAb?.result) { showToast("これ以上戻れません"); return; }
 
-    // 同イニング内のアウト数（targetAb より前）
+    // 同イニング内のアウト数（targetAb より前、打者アウト + 走者アウト）
     let newOuts = 0;
     for (let ai = 0; ai < targetAbIdx; ai++) {
-      const r = lastHalf.atBats[ai].result || "";
-      newOuts += (isOutResult(r) ? 1 : 0) + (lastHalf.atBats[ai].runnerOuts || 0);
+      newOuts += countAtBatOuts(lastHalf.atBats[ai]);
     }
     // targetAb の開始時点のランナー状態を復元（旧フォーマット対応）
     // resultだけ消してpitchesは残す（1球単位で戻れるように）
@@ -3796,14 +3666,19 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
                 </div>
               </div>
               <div style={{ display:"flex", flexDirection:"column", gap:7, padding:"12px 14px" }}>
-                {advanceOptions(currentRunner.baseNum).map(opt => (
-                  <Btn key={opt.value} label={opt.label}
-                    bg={opt.value==="out"?"#F5EAEA":opt.value===4?C.brandLight:C.bg}
-                    border={opt.value==="out"?"#8B2020":opt.value===4?C.brand:C.divider}
-                    color={opt.value==="out"?"#8B2020":opt.value===4?C.brand:C.textPri}
-                    onClick={() => handleRunnerAdvance(opt.value)}
-                  />
-                ))}
+                {advanceOptions(currentRunner.baseNum).map(opt => {
+                  const baseKey = BASE_NUM_TO_KEY[opt.value];
+                  const occupied = baseKey ? !!newRunners[baseKey] : false;
+                  return (
+                    <Btn key={opt.value} label={occupied ? `${opt.label}（先行ランナーあり）` : opt.label}
+                      bg={opt.value==="out"?"#F5EAEA":opt.value===4?C.brandLight:C.bg}
+                      border={opt.value==="out"?"#8B2020":opt.value===4?C.brand:C.divider}
+                      color={opt.value==="out"?"#8B2020":opt.value===4?C.brand:C.textPri}
+                      disabled={occupied}
+                      onClick={() => handleRunnerAdvance(opt.value)}
+                    />
+                  );
+                })}
               </div>
             </>}
 
@@ -3947,7 +3822,7 @@ function calcSeasonStats(games) {
 
         const runs = ab.runsScored || 0;
         if (runs > 0) {
-          const isDP = r.includes("ゲッツー");
+          const isDP = isDoublePlay(r);
           if (!isDP) {
             if ((isBB || isIBB || isHBP) && rs.first && rs.second && rs.third) s.rbi += 1;
             else if (!isBB && !isIBB && !isHBP) s.rbi += runs;
@@ -4265,7 +4140,7 @@ function SeasonStatsTab({ team }) {
         const r = ab.result || "";
         const runs = ab.runsScored || 0;
         if (runs === 0) return sum;
-        if (r.includes("ゲッツー")) return sum;
+        if (isDoublePlay(r)) return sum;
         const isBBH = r.includes("フォアボール") || r.includes("故意四球") || r.includes("デッドボール");
         const rs = ab.runnersAtStart || {};
         if (isBBH && rs.first && rs.second && rs.third) return sum + 1;
