@@ -25,7 +25,7 @@
   <script type="text/babel">
     const { useState, useRef, useEffect } = React;
 
-    const APP_VERSION = "v2026.07.16-1";
+    const APP_VERSION = "v2026.07.26-1";
 
     // Supabase接続
     const SUPABASE_URL = "https://zorxexynepvbaajblsfm.supabase.co";
@@ -1248,6 +1248,7 @@ function MyTeamTab({ teamId, onLineupChange, onBenchChange }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newPlayer, setNewPlayer] = useState({ name: "", number: "" });
   const [prevOrder, setPrevOrder] = useState(null);
+  const [dhPitcherId, setDhPitcherId] = useState(null); // DH制度：打順に入らない先発投手
   const dragIdx = useRef(null);
   const dragOverIdx = useRef(null);
 
@@ -1282,15 +1283,26 @@ function MyTeamTab({ teamId, onLineupChange, onBenchChange }) {
   const loadPlayers = loadData;
 
   const stamenIds = lineup.map(l => l.playerId).filter(Boolean);
-  const bench = players.filter(p => !stamenIds.includes(p.id));
+  const hasPitcherInLineup = lineup.some(r => r.pos === "投");
+  // DH制度で別登録した投手は「出場中」扱いにし、控えリストや投手候補から除外する
+  const activeIds = hasPitcherInLineup || !dhPitcherId ? stamenIds : [...stamenIds, dhPitcherId];
+  const bench = players.filter(p => !activeIds.includes(p.id));
+  const pitcherCandidates = players.filter(p => !stamenIds.includes(p.id));
 
   // 控えリストを親に通知
   React.useEffect(() => {
     if (onBenchChange) onBenchChange(bench.map(p => ({ number: p.number, name: p.name, pos: "-" })));
-  }, [stamenIds.join(","), players.length]);
+  }, [activeIds.join(","), players.length]);
 
-  const notifyLineup = (newLineup) => {
-    if (onLineupChange) onLineupChange(newLineup.map(r => ({ ...r, player: players.find(p => p.id === r.playerId) })));
+  // 打順に「投」がいない場合、打順を9人揃えたまま先発投手だけを別枠で登録する（DH制度）
+  const buildLineupWithPitcher = (newLineup, pitcherId) => {
+    if (newLineup.some(r => r.pos === "投")) return newLineup;
+    if (!pitcherId || newLineup.some(r => r.playerId === pitcherId)) return newLineup;
+    return [...newLineup, { order: null, playerId: pitcherId, pos: "投" }];
+  };
+  const notifyLineup = (newLineup, pitcherId = dhPitcherId) => {
+    const outLineup = buildLineupWithPitcher(newLineup, pitcherId);
+    if (onLineupChange) onLineupChange(outLineup.map(r => ({ ...r, player: players.find(p => p.id === r.playerId) })));
   };
   const updatePlayer = (order, val) => {
     const newLineup = lineup.map(r => r.order === order ? { ...r, playerId: parseInt(val) || null } : r);
@@ -1299,6 +1311,11 @@ function MyTeamTab({ teamId, onLineupChange, onBenchChange }) {
   const updatePos = (order, pos) => {
     const newLineup = lineup.map(r => r.order === order ? { ...r, pos } : r);
     setLineup(newLineup); notifyLineup(newLineup);
+  };
+  const updateDhPitcher = (val) => {
+    const id = parseInt(val) || null;
+    setDhPitcherId(id);
+    notifyLineup(lineup, id);
   };
 
   const applyPrevOrder = () => {
@@ -1384,6 +1401,27 @@ function MyTeamTab({ teamId, onLineupChange, onBenchChange }) {
             isLast={idx === 8}
           />
         ))}
+      </div>
+
+      {/* 先発投手（打順とは別枠：DH制度対応） */}
+      <div style={{ background: C.card, borderRadius: 14, padding: "12px 16px", boxShadow: C.cardShadow, marginBottom: 8 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: C.textTer, letterSpacing: "0.08em", marginBottom: 8 }}>先発投手</div>
+        {hasPitcherInLineup ? (
+          <div style={{ fontSize: 13, color: C.textSec }}>
+            打順{lineup.find(r => r.pos === "投")?.order}番の選手が投手を兼任します
+          </div>
+        ) : (
+          <>
+            <select value={dhPitcherId || ""} onChange={e => updateDhPitcher(e.target.value)}
+              style={{ width: "100%", border: "none", borderBottom: `1px solid ${C.divider}`, outline: "none", fontSize: 14, fontWeight: dhPitcherId ? 600 : 400, color: dhPitcherId ? C.textPri : C.textTer, background: "transparent", fontFamily: "inherit", padding: "4px 0" }}>
+              <option value="">-- 投手を選択 --</option>
+              {pitcherCandidates.map(p => (
+                <option key={p.id} value={p.id}>#{p.number} {p.name}</option>
+              ))}
+            </select>
+            <div style={{ fontSize: 11, color: C.textTer, marginTop: 6 }}>DH制度：打順に入らない投手はここで登録します</div>
+          </>
+        )}
       </div>
 
       {/* 新規選手追加ボタン */}
@@ -1473,6 +1511,7 @@ function OpponentTab({ onLineupChange, onBenchChange, onTeamNameChange }) {
     Array.from({ length: LINEUP_SIZE }, (_, i) => ({ order: i + 1, number: "", name: "", pos: "-" }))
   );
   const [bench, setBench] = useState([]);
+  const [dhPitcher, setDhPitcher] = useState({ number: "", name: "" }); // DH制度：打順に入らない先発投手
   const [pastTeams, setPastTeams] = useState([
     { name: "テストチーム", date: "2026-06-01", lineup: [
       { order:1, number:"1", name:"1番選手", pos:"中" },
@@ -1509,8 +1548,17 @@ function OpponentTab({ onLineupChange, onBenchChange, onTeamNameChange }) {
       });
   }, []);
 
-  const notify = (nl) => {
-    if (onLineupChange) onLineupChange(nl.map(r => ({ ...r, number: parseInt(r.number) || 0, name: r.name.trim() })));
+  const hasPitcherInLineup = lineup.some(r => r.pos === "投");
+
+  // 打順に「投」がいない場合、打順を9人揃えたまま先発投手だけを別枠で登録する（DH制度）
+  const buildLineupWithPitcher = (nl, pitcher) => {
+    if (nl.some(r => r.pos === "投")) return nl;
+    if (!pitcher || !pitcher.name.trim()) return nl;
+    return [...nl, { order: null, number: pitcher.number, name: pitcher.name, pos: "投" }];
+  };
+  const notify = (nl, pitcher = dhPitcher) => {
+    const outLineup = buildLineupWithPitcher(nl, pitcher);
+    if (onLineupChange) onLineupChange(outLineup.map(r => ({ ...r, number: parseInt(r.number) || 0, name: r.name.trim() })));
   };
 
   const notifyBench = (bl) => {
@@ -1530,24 +1578,35 @@ function OpponentTab({ onLineupChange, onBenchChange, onTeamNameChange }) {
     setBench(nb); notifyBench(nb);
   };
 
-  const goToOrder = (name, nl = lineup) => {
+  const goToOrder = (name, nl = lineup, pitcher = dhPitcher) => {
     if (onTeamNameChange) onTeamNameChange(name);
-    notify(nl);
+    notify(nl, pitcher);
     setStep("order");
   };
 
   const selectPast = (team) => {
-    const preLineup = team.lineup.map(r => ({
+    const pitcherRow = team.lineup.find(r => r.pos === "投" && r.order == null);
+    const preLineup = team.lineup.filter(r => !(r.pos === "投" && r.order == null)).map(r => ({
       order: r.order, number: r.number ? String(r.number) : "", name: r.name || "", pos: r.pos || "-",
     }));
     const preBench = (team.bench || []).map((r, i) => ({
       id: Date.now() + i, number: r.number ? String(r.number) : "", name: r.name || "", pos: r.pos || "-",
     }));
+    const preDhPitcher = pitcherRow
+      ? { number: pitcherRow.number ? String(pitcherRow.number) : "", name: pitcherRow.name || "" }
+      : { number: "", name: "" };
     setTeamName(team.name);
     setLineup(preLineup);
+    setDhPitcher(preDhPitcher);
     setBench(preBench);
     notifyBench(preBench);
-    goToOrder(team.name, preLineup);
+    goToOrder(team.name, preLineup, preDhPitcher);
+  };
+
+  const updateDhPitcher = (field, val) => {
+    const np = { ...dhPitcher, [field]: val };
+    setDhPitcher(np);
+    notify(lineup, np);
   };
 
   const update = (order, field, val) => {
@@ -1642,6 +1701,28 @@ function OpponentTab({ onLineupChange, onBenchChange, onTeamNameChange }) {
         ))}
       </div>
 
+      {/* 先発投手（打順とは別枠：DH制度対応） */}
+      <div style={{ background: C.card, borderRadius: 14, padding: "12px 16px", boxShadow: C.cardShadow, marginTop: 10 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: C.textTer, letterSpacing: "0.08em", marginBottom: 8 }}>先発投手</div>
+        {hasPitcherInLineup ? (
+          <div style={{ fontSize: 13, color: C.textSec }}>
+            打順{lineup.find(r => r.pos === "投")?.order}番の選手が投手を兼任します
+          </div>
+        ) : (
+          <>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input inputMode="numeric" placeholder="#" value={dhPitcher.number}
+                onChange={e => updateDhPitcher("number", e.target.value)}
+                style={{ width: 36, border: "none", borderBottom: `1px solid ${C.divider}`, outline: "none", fontSize: 14, padding: "4px 0", textAlign: "center", fontFamily: "inherit", color: C.textSec }}/>
+              <input placeholder="選手名" value={dhPitcher.name}
+                onChange={e => updateDhPitcher("name", e.target.value)}
+                style={{ flex: 1, border: "none", borderBottom: `1px solid ${C.divider}`, outline: "none", fontSize: 14, padding: "4px 0", fontFamily: "inherit", fontWeight: dhPitcher.name ? 600 : 400, color: C.textPri }}/>
+            </div>
+            <div style={{ fontSize: 11, color: C.textTer, marginTop: 6 }}>DH制度：打順に入らない投手はここで登録します</div>
+          </>
+        )}
+      </div>
+
       {/* 控え */}
       <div style={{ fontSize: 10, fontWeight: 700, color: C.textTer, letterSpacing: "0.08em", margin: "14px 0 8px" }}>控え選手</div>
       {bench.length > 0 && (
@@ -1705,6 +1786,10 @@ function OrderRegistration({ onNext, onBack, teamId, initialOrder = null }) {
       const emptyRows = myLineup.filter(r => !r.playerId);
       if (emptyRows.length > 0)
         errors.push(`自チーム：${emptyRows.map(r => r.order + '番').join('・')} の選手が未選択です`);
+
+      // 投手チェック（打順の「投」、またはDH制度時の先発投手欄のどちらかが必要）
+      if (!myLineup.some(r => r.pos === "投"))
+        errors.push('自チーム：投手が設定されていません（打順の「投」、またはDH制度なら先発投手欄で登録してください）');
     }
 
     // ポジション未設定チェック
@@ -1723,6 +1808,10 @@ function OrderRegistration({ onNext, onBack, teamId, initialOrder = null }) {
     const oppDupPos = [...new Set(oppFilledPos.filter((p, i) => oppFilledPos.indexOf(p) !== i))];
     if (oppDupPos.length > 0)
       warnings.push(`相手チーム：「${oppDupPos.join('」「')}」が重複しています（このまま記録できます）`);
+
+    // 投手未設定チェック（相手チーム）→ 警告のみ
+    if (oppLineup.length > 0 && !oppLineup.some(r => r.pos === "投"))
+      warnings.push('相手チーム：投手が設定されていません（このまま記録できます）');
 
     if (errors.length > 0) { setOrderErrors([...errors, ...warnings.map(w => '⚠ ' + w)]); return; }
 
@@ -1867,7 +1956,7 @@ function SubstitutionModal({
       style={{ display:"flex", alignItems:"center", padding:"14px 20px", borderBottom:`1px solid ${C.divider}`,
         cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.35 : 1 }}>
       <div style={{ width:24, height:24, borderRadius:"50%", background:C.brandLight, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginRight:10 }}>
-        <span style={{ fontSize:11, fontWeight:800, color:C.brand }}>{p.order}</span>
+        <span style={{ fontSize: p.order ? 11 : 9, fontWeight:800, color:C.brand }}>{p.order ?? "投"}</span>
       </div>
       <div style={{ width:28, fontSize:11, color:C.textTer }}>#{p.number}</div>
       <div style={{ flex:1, fontSize:14, fontWeight:600, color:C.textPri }}>{p.name}</div>
@@ -2647,7 +2736,7 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
       showToast(dpLabel);
       setGameLog(log => log.map((h, hi) => hi !== currentHalfIdx ? h : {
         ...h,
-        atBats: h.atBats.map((ab, ai) => ai !== currentAtBatIdx ? ab : { ...ab, runnersAfter: finalRunners, runnerOuts: runnerOutCount })
+        atBats: h.atBats.map((ab, ai) => ai !== currentAtBatIdx ? ab : { ...ab, runnersAfter: finalRunners, runnerOuts: (ab.runnerOuts || 0) + runnerOutCount })
       }));
       setRunners(finalRunners);
       doOut(finalRunners, totalOuts);
@@ -2659,7 +2748,7 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
       showToast(pendingResult?.label ?? "出塁");
       setGameLog(log => log.map((h, hi) => hi !== currentHalfIdx ? h : {
         ...h,
-        atBats: h.atBats.map((ab, ai) => ai !== currentAtBatIdx ? ab : { ...ab, runnersAfter: next, runnerOuts: runnerOutCount })
+        atBats: h.atBats.map((ab, ai) => ai !== currentAtBatIdx ? ab : { ...ab, runnersAfter: next, runnerOuts: (ab.runnerOuts || 0) + runnerOutCount })
       }));
       setRunners(next);
       setLastBatterBase(batterBase ? (BASE_NUM_TO_KEY[batterBase] ?? null) : null);
@@ -2805,11 +2894,13 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
           inning, isTop, balls, strikes, outs,
           runners, batterIdxA, batterIdxB, pitchCount,
           batting, lineup: activeBattersA,
-          oppTeamName, oppLineup: activeBattersB, oppBench: gameOrder?.oppBench || [],
+          oppTeamName, oppLineup: activeBattersB,
+          myBench: gameOrder?.myBench || [], oppBench: gameOrder?.oppBench || [],
           currentLineupA, currentLineupB, substitutions, runnerPitchers,
           startingLineupA: startingLineupA.current, startingLineupB: startingLineupB.current,
         } : {
-          batting, lineup: activeBattersA, oppTeamName, oppLineup: activeBattersB, oppBench: gameOrder?.oppBench || [],
+          batting, lineup: activeBattersA, oppTeamName, oppLineup: activeBattersB,
+          myBench: gameOrder?.myBench || [], oppBench: gameOrder?.oppBench || [],
           currentLineupA, currentLineupB, substitutions, runnerPitchers,
           startingLineupA: startingLineupA.current, startingLineupB: startingLineupB.current,
         },
@@ -2996,6 +3087,13 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
     } else if (action === "盗塁死" || action === "牽制アウト") {
       addEvent(`${baseLabel}ランナー ${action}`);
       const nextRunners = { ...runners, [base]: null };
+      // 走者アウトを現打席の runnerOuts に記録（投手の投球回・アウト数集計に反映）
+      setGameLog(log => log.map((h, hi) => hi !== currentHalfIdx ? h : {
+        ...h,
+        atBats: h.atBats.map((ab, ai) => ai !== currentAtBatIdx ? ab : {
+          ...ab, runnerOuts: (ab.runnerOuts || 0) + 1, runnersAfter: nextRunners
+        })
+      }));
       setRunners(nextRunners);
       showToast(action);
       doOut(nextRunners, undefined, false);
@@ -3022,11 +3120,14 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
   const currentRunner = runnerQueue[currentRunnerIdx];
 
   // 現在の投手の投球数（gameLogから集計、pitchCount stateは全投手合算なので使わない）
-  const currentPitcherPitchCount = React.useMemo(() =>
-    gameLog.reduce((total, half) =>
+  // 現在の攻撃側と同じ表裏のハーフのみ集計する（両チームの投手が同じ背番号でも合算しない）
+  const currentPitcherPitchCount = React.useMemo(() => {
+    const tb = isTop ? "表" : "裏";
+    return gameLog.reduce((total, half) =>
+      half.topBottom !== tb ? total :
       total + half.atBats.reduce((sum, ab) =>
-        ab.pitcherNumber === pitcher.number ? sum + (ab.pitches?.length || 0) : sum, 0), 0),
-    [gameLog, pitcher.number]);
+        ab.pitcherNumber === pitcher.number ? sum + (ab.pitches?.length || 0) : sum, 0), 0);
+  }, [gameLog, pitcher.number, isTop]);
   const advanceOptions = (baseNum) => {
     const opts = [];
     for (let b = baseNum; b <= 3; b++) {
@@ -3077,7 +3178,7 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
                     {batters.map((b, i) => (
                       <div key={i} style={{ display:"flex", alignItems:"center", padding:"10px 20px", borderBottom:`1px solid ${C.divider}` }}>
                         <div style={{ width:24, height:24, borderRadius:"50%", background:C.brandLight, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginRight:8 }}>
-                          <span style={{ fontSize:11, fontWeight:800, color:C.brand }}>{b.order}</span>
+                          <span style={{ fontSize: b.order ? 11 : 9, fontWeight:800, color:C.brand }}>{b.order ?? "投"}</span>
                         </div>
                         <div style={{ width:28, fontSize:11, color:C.textTer, flexShrink:0 }}>#{b.number}</div>
                         <div style={{ flex:1, fontSize:13, fontWeight:600, color:C.textPri }}>{b.name}</div>
@@ -4473,11 +4574,12 @@ function NeoScoreBookApp() {
     const scoreA = batting === "先攻" ? (data.score_my || 0) : (data.score_opp || 0);
     const scoreB = batting === "先攻" ? (data.score_opp || 0) : (data.score_my || 0);
     const myLineup = (batting === "先攻" ? (gs.lineup || []) : (gs.oppLineup || []))
-      .map((p, i) => ({ order: p.order || i+1, player: { number: p.number, name: p.name }, pos: p.pos || "-" }));
+      .map((p, i) => ({ order: p.order || (p.pos === "投" ? null : i+1), playerId: p.playerId ?? null, player: { number: p.number, name: p.name }, pos: p.pos || "-" }));
     const order = {
       batting, myLineup,
       oppLineup: batting === "先攻" ? (gs.oppLineup || []) : (gs.lineup || []),
       oppTeamName: data.opponent || "",
+      myBench: gs.myBench || [], oppBench: gs.oppBench || [],
       gameDate: data.game_date, gameType: data.game_type, tournament: data.tournament,
     };
     return { data, gs, batting, scoreA, scoreB, order, log: data.game_log || [] };
