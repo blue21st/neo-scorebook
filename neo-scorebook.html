@@ -25,7 +25,7 @@
   <script type="text/babel">
     const { useState, useRef, useEffect } = React;
 
-    const APP_VERSION = "v2026.08.11-1";
+    const APP_VERSION = "v2026.08.11-2";
 
     // Supabase接続
     const SUPABASE_URL = "https://zorxexynepvbaajblsfm.supabase.co";
@@ -2201,9 +2201,9 @@ function SubstitutionModal({
             () => setSubStep(SUB_STEPS.IN)
           )}
 
-          {/* 代打: 入る選手 */}
+          {/* 代打: 入る選手（守備位置は退く打者のポジションを引き継ぐ） */}
           {subStep === SUB_STEPS.PINCH_HIT_IN && benchSelectUI(
-            (p) => { setSubAddInPlayer(p); setSubAddNewPos(p.pos || "-"); setSubStep(SUB_STEPS.PINCH_HIT_POS); },
+            (p) => { setSubAddInPlayer(p); setSubAddNewPos(batter?.pos || "-"); setSubStep(SUB_STEPS.PINCH_HIT_POS); },
             () => setSubStep(SUB_STEPS.LIST)
           )}
 
