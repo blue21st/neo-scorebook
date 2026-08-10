@@ -25,7 +25,7 @@
   <script type="text/babel">
     const { useState, useRef, useEffect } = React;
 
-    const APP_VERSION = "v2026.07.26-1";
+    const APP_VERSION = "v2026.08.11-1";
 
     // Supabase接続
     const SUPABASE_URL = "https://zorxexynepvbaajblsfm.supabase.co";
@@ -1196,24 +1196,62 @@ const PAST_TEAMS = [
 const makeEmptyOrder = () =>
   Array.from({ length: LINEUP_SIZE }, (_, i) => ({ order: i + 1, playerId: null, pos: "-" }));
 
+// ── 打順の並び替え（Pointer Events：スマホのタッチ操作でも動く）──
+// HTML5ネイティブのdraggableはiOS Safari等のタッチでは発火しないため使わない
+function useDragReorder(onReorder) {
+  const [dragIdx, setDragIdx] = useState(null);
+  const [overIdx, setOverIdx] = useState(null);
+
+  const handlePointerDown = (e, idx) => {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setDragIdx(idx);
+    setOverIdx(idx);
+  };
+  const handlePointerMove = (e) => {
+    if (dragIdx === null) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const rowEl = el && el.closest && el.closest("[data-row-idx]");
+    if (rowEl) {
+      const idx = parseInt(rowEl.getAttribute("data-row-idx"), 10);
+      if (!Number.isNaN(idx) && idx !== overIdx) setOverIdx(idx);
+    }
+  };
+  const handlePointerUp = () => {
+    if (dragIdx !== null && overIdx !== null && dragIdx !== overIdx) onReorder(dragIdx, overIdx);
+    setDragIdx(null);
+    setOverIdx(null);
+  };
+
+  return { dragIdx, overIdx, handlePointerDown, handlePointerMove, handlePointerUp };
+}
+
 // ── ドラッグ可能なオーダー行 ──
-function OrderRow({ row, idx, players, stamenIds, onPlayerChange, onPosChange, onDragStart, onDragOver, onDrop, isLast }) {
+function OrderRow({ row, idx, players, stamenIds, onPlayerChange, onPosChange, dragIdx, overIdx, onPointerDown, onPointerMove, onPointerUp, isLast }) {
   const player = players.find(p => p.id === row.playerId);
   const selectStyle = {
     border: "none", outline: "none", background: "transparent",
     fontSize: 13, color: C.textPri, fontFamily: "inherit",
     cursor: "pointer",
   };
+  const isDragging = dragIdx === idx;
+  const isOver = overIdx === idx && dragIdx !== null && dragIdx !== idx;
 
   return (
     <div
-      draggable
-      onDragStart={() => onDragStart(idx)}
-      onDragOver={e => { e.preventDefault(); onDragOver(idx); }}
-      onDrop={onDrop}
-      style={{ display: "flex", alignItems: "center", padding: "10px 12px", borderBottom: !isLast ? `1px solid ${C.divider}` : "none", gap: 8, background: C.card }}
+      data-row-idx={idx}
+      style={{ display: "flex", alignItems: "center", padding: "10px 12px",
+        borderBottom: !isLast ? `1px solid ${C.divider}` : "none",
+        borderTop: isOver ? `2px solid ${C.brand}` : "2px solid transparent",
+        gap: 8, background: isDragging ? C.brandLight : C.card, opacity: isDragging ? 0.85 : 1 }}
     >
-      <div style={{ cursor: "grab", color: C.textTer, flexShrink: 0 }}><GripVertical size={16}/></div>
+      <div
+        onPointerDown={e => onPointerDown(e, idx)}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        style={{ cursor: "grab", color: C.textTer, flexShrink: 0, touchAction: "none" }}
+      ><GripVertical size={16}/></div>
       <div style={{ width: 20, height: 20, borderRadius: "50%", background: C.brandLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
         <span style={{ fontSize: 11, fontWeight: 800, color: C.brand }}>{row.order}</span>
       </div>
@@ -1249,8 +1287,6 @@ function MyTeamTab({ teamId, onLineupChange, onBenchChange }) {
   const [newPlayer, setNewPlayer] = useState({ name: "", number: "" });
   const [prevOrder, setPrevOrder] = useState(null);
   const [dhPitcherId, setDhPitcherId] = useState(null); // DH制度：打順に入らない先発投手
-  const dragIdx = useRef(null);
-  const dragOverIdx = useRef(null);
 
   useEffect(() => {
     loadData();
@@ -1339,14 +1375,15 @@ function MyTeamTab({ teamId, onLineupChange, onBenchChange }) {
     notifyLineup(newLineup);
   };
 
-  const handleDrop = () => {
-    if (dragIdx.current === null || dragOverIdx.current === null) return;
+  const reorderLineup = (fromIdx, toIdx) => {
     const arr = [...lineup];
-    const [moved] = arr.splice(dragIdx.current, 1);
-    arr.splice(dragOverIdx.current, 0, moved);
-    setLineup(arr.map((r, i) => ({ ...r, order: i + 1 })));
-    dragIdx.current = null; dragOverIdx.current = null;
+    const [moved] = arr.splice(fromIdx, 1);
+    arr.splice(toIdx, 0, moved);
+    const newLineup = arr.map((r, i) => ({ ...r, order: i + 1 }));
+    setLineup(newLineup);
+    notifyLineup(newLineup);
   };
+  const { dragIdx, overIdx, handlePointerDown, handlePointerMove, handlePointerUp } = useDragReorder(reorderLineup);
 
   const addPlayer = async () => {
     if (!newPlayer.name.trim() || !newPlayer.number) return;
@@ -1397,7 +1434,8 @@ function MyTeamTab({ teamId, onLineupChange, onBenchChange }) {
         {lineup.map((row, idx) => (
           <OrderRow key={row.order} row={row} idx={idx} players={players} stamenIds={stamenIds}
             onPlayerChange={updatePlayer} onPosChange={updatePos}
-            onDragStart={i => { dragIdx.current = i; }} onDragOver={i => { dragOverIdx.current = i; }} onDrop={handleDrop}
+            dragIdx={dragIdx} overIdx={overIdx}
+            onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp}
             isLast={idx === 8}
           />
         ))}
@@ -1462,21 +1500,29 @@ function MyTeamTab({ teamId, onLineupChange, onBenchChange }) {
 }
 
 // ── 相手チームオーダー行 ──
-function OpponentOrderRow({ row, idx, onNameChange, onNumberChange, onPosChange, onDragStart, onDragOver, onDrop, isLast }) {
+function OpponentOrderRow({ row, idx, onNameChange, onNumberChange, onPosChange, dragIdx, overIdx, onPointerDown, onPointerMove, onPointerUp, isLast }) {
   const inputStyle = {
     border: "none", outline: "none", background: "transparent",
     fontSize: 13, fontFamily: "inherit", padding: "2px 0",
     borderBottom: `1px solid ${C.divider}`,
   };
+  const isDragging = dragIdx === idx;
+  const isOver = overIdx === idx && dragIdx !== null && dragIdx !== idx;
   return (
     <div
-      draggable
-      onDragStart={() => onDragStart(idx)}
-      onDragOver={e => { e.preventDefault(); onDragOver(idx); }}
-      onDrop={onDrop}
-      style={{ display: "flex", alignItems: "center", padding: "10px 12px", borderBottom: !isLast ? `1px solid ${C.divider}` : "none", gap: 8, background: C.card }}
+      data-row-idx={idx}
+      style={{ display: "flex", alignItems: "center", padding: "10px 12px",
+        borderBottom: !isLast ? `1px solid ${C.divider}` : "none",
+        borderTop: isOver ? `2px solid ${C.brand}` : "2px solid transparent",
+        gap: 8, background: isDragging ? C.brandLight : C.card, opacity: isDragging ? 0.85 : 1 }}
     >
-      <div style={{ cursor: "grab", color: C.textTer, flexShrink: 0 }}><GripVertical size={16}/></div>
+      <div
+        onPointerDown={e => onPointerDown(e, idx)}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        style={{ cursor: "grab", color: C.textTer, flexShrink: 0, touchAction: "none" }}
+      ><GripVertical size={16}/></div>
       <div style={{ width: 20, height: 20, borderRadius: "50%", background: C.brandLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
         <span style={{ fontSize: 11, fontWeight: 800, color: C.brand }}>{row.order}</span>
       </div>
@@ -1526,8 +1572,6 @@ function OpponentTab({ onLineupChange, onBenchChange, onTeamNameChange }) {
     ]},
   ]);
   const [pastOpen, setPastOpen] = useState(false);
-  const dragIdx = useRef(null);
-  const dragOverIdx = useRef(null);
 
   useEffect(() => {
     supabase
@@ -1615,16 +1659,15 @@ function OpponentTab({ onLineupChange, onBenchChange, onTeamNameChange }) {
     notify(nl);
   };
 
-  const handleDrop = () => {
-    if (dragIdx.current === null || dragOverIdx.current === null) return;
+  const reorderLineup = (fromIdx, toIdx) => {
     const arr = [...lineup];
-    const [moved] = arr.splice(dragIdx.current, 1);
-    arr.splice(dragOverIdx.current, 0, moved);
+    const [moved] = arr.splice(fromIdx, 1);
+    arr.splice(toIdx, 0, moved);
     const nl = arr.map((r, i) => ({ ...r, order: i + 1 }));
     setLineup(nl);
     notify(nl);
-    dragIdx.current = null; dragOverIdx.current = null;
   };
+  const { dragIdx, overIdx, handlePointerDown, handlePointerMove, handlePointerUp } = useDragReorder(reorderLineup);
 
   if (step === "select") return (
     <div>
@@ -1695,7 +1738,8 @@ function OpponentTab({ onLineupChange, onBenchChange, onTeamNameChange }) {
             onNameChange={(order, val) => update(order, "name", val)}
             onNumberChange={(order, val) => update(order, "number", val)}
             onPosChange={(order, val) => update(order, "pos", val)}
-            onDragStart={i => { dragIdx.current = i; }} onDragOver={i => { dragOverIdx.current = i; }} onDrop={handleDrop}
+            dragIdx={dragIdx} overIdx={overIdx}
+            onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp}
             isLast={idx === 8}
           />
         ))}
@@ -2385,6 +2429,7 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
   const [pendingRunnerOuts, setPendingRunnerOuts] = useState(0);
   const [selectedBase, setSelectedBase] = useState(null);
   const [lastBatterBase, setLastBatterBase] = useState(null); // 出塁直後の塁 "first"|"second"|"third"|null
+  const [baseActionComment, setBaseActionComment] = useState(null); // { action, text } | null（その他進塁・その他アウトのコメント入力中）
 
   // オーダー修正確認モーダル
   const [showEditOrderModal, setShowEditOrderModal] = useState(false);
@@ -3052,12 +3097,13 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
 
   const handleBaseClick = (base) => { setSelectedBase(base); goTo("baseAction"); };
 
-  const handleBaseAction = (action) => {
+  const handleBaseAction = (action, comment) => {
     const base = selectedBase;
     const nb = nextBase(base);
     if (action === "盗塁成功" && nb && runners[nb]) { setAlert("前にランナーがいます"); return; }
     saveSnapshot();
     const baseLabel = base === "first" ? "1塁" : base === "second" ? "2塁" : "3塁";
+    const withComment = (text) => (comment && comment.trim()) ? `${text}（${comment.trim()}）` : text;
     if (action === "直前プレー進塁") {
       const runner = runners[base];
       addEvent(`${baseLabel}ランナー ${runner?.name ?? "?"} 直前のプレーの続きで進塁`);
@@ -3084,8 +3130,8 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
         atBats: h.atBats.map((ab, ai) => ai !== currentAtBatIdx ? ab : { ...ab, runnersAfter: nextRunners })
       }));
       showToast("盗塁成功");
-    } else if (action === "盗塁死" || action === "牽制アウト") {
-      addEvent(`${baseLabel}ランナー ${action}`);
+    } else if (action === "盗塁死" || action === "牽制アウト" || action === "その他アウト") {
+      addEvent(withComment(`${baseLabel}ランナー ${action}`));
       const nextRunners = { ...runners, [base]: null };
       // 走者アウトを現打席の runnerOuts に記録（投手の投球回・アウト数集計に反映）
       setGameLog(log => log.map((h, hi) => hi !== currentHalfIdx ? h : {
@@ -3101,7 +3147,7 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
       addEvent(`${baseLabel}ランナー 牽制セーフ`); showToast("牽制セーフ");
     } else if (action === "WP進塁" || action === "PB進塁" || action === "その他進塁") {
       const runner = runners[base];
-      addEvent(`${baseLabel}ランナー #${runner?.number ?? "?"} ${action}`);
+      addEvent(withComment(`${baseLabel}ランナー #${runner?.number ?? "?"} ${action}`));
       const nextRunners = { ...runners, [base]: null };
       if (base === "first")       { nextRunners.second = runner; }
       else if (base === "second") { nextRunners.third  = runner; }
@@ -3805,11 +3851,41 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
                 <Btn label="盗塁死"    bg="#F5EAEA" border="#8B2020" color="#8B2020" onClick={() => handleBaseAction("盗塁死")}/>
                 <Btn label="WP進塁"    bg="#F1EFE8" border="#9B9A94" color="#3A3A38" onClick={() => handleBaseAction("WP進塁")}/>
                 <Btn label="PB進塁"    bg="#F1EFE8" border="#9B9A94" color="#3A3A38" onClick={() => handleBaseAction("PB進塁")}/>
-                <Btn label="その他進塁" bg="#F1EFE8" border="#9B9A94" color="#3A3A38" onClick={() => handleBaseAction("その他進塁")}/>
+                <Btn label="その他進塁" bg="#F1EFE8" border="#9B9A94" color="#3A3A38" onClick={() => setBaseActionComment({ action:"その他進塁", text:"" })}/>
                 <Btn label="牽制セーフ" bg="#F1EFE8" border="#9B9A94" color="#3A3A38" onClick={() => handleBaseAction("牽制セーフ")}/>
                 <Btn label="牽制アウト" bg="#F5EAEA" border="#8B2020" color="#8B2020" onClick={() => handleBaseAction("牽制アウト")}/>
+                <Btn label="その他アウト" bg="#F5EAEA" border="#8B2020" color="#8B2020" onClick={() => setBaseActionComment({ action:"その他アウト", text:"" })}/>
               </div>
             </>}
+
+            {/* その他進塁・その他アウト：コメント入力 */}
+            {baseActionComment && (
+              <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:200, display:"flex", alignItems:"flex-end", justifyContent:"center" }}
+                onClick={() => setBaseActionComment(null)}>
+                <div onClick={e => e.stopPropagation()}
+                  style={{ background:C.card, borderRadius:"20px 20px 0 0", width:"100%", maxWidth:480, padding:"20px 20px 28px" }}>
+                  <div style={{ fontSize:15, fontWeight:800, color:C.textPri, marginBottom:4 }}>{baseActionComment.action}</div>
+                  <div style={{ fontSize:12, color:C.textSec, marginBottom:12 }}>内容をコメントで残せます（任意・経過タブに表示されます）</div>
+                  <textarea
+                    autoFocus
+                    value={baseActionComment.text}
+                    onChange={e => setBaseActionComment(c => ({ ...c, text: e.target.value }))}
+                    placeholder="例：悪送球で三塁まで進塁"
+                    style={{ width:"100%", minHeight:70, border:`1px solid ${C.divider}`, borderRadius:10, outline:"none", fontSize:14, padding:"10px 12px", fontFamily:"inherit", resize:"none", color:C.textPri, boxSizing:"border-box" }}
+                  />
+                  <div style={{ display:"flex", gap:8, marginTop:14 }}>
+                    <div onClick={() => setBaseActionComment(null)}
+                      style={{ flex:1, padding:"14px", borderRadius:50, textAlign:"center", fontWeight:700, fontSize:14, background:C.bg, border:`1px solid ${C.divider}`, color:C.textSec, cursor:"pointer" }}>
+                      キャンセル
+                    </div>
+                    <div onClick={() => { const { action, text } = baseActionComment; setBaseActionComment(null); handleBaseAction(action, text); }}
+                      style={{ flex:1, padding:"14px", borderRadius:50, textAlign:"center", fontWeight:700, fontSize:14, background:C.brand, color:C.brandText, cursor:"pointer" }}>
+                      確定
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
           </>}
 
