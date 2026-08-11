@@ -1,0 +1,36 @@
+name: Deploy to baseball.versus.jp
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "neo-scorebook.html"
+      - "scorebook-logic.js"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # デプロイ対象だけを専用フォルダに集める
+      # （リポジトリ直下には他の未管理ファイルもあるため、
+      #   local-dir をリポジトリ全体にしない）
+      - name: Prepare deploy folder
+        run: |
+          mkdir -p dist
+          cp neo-scorebook.html dist/
+          cp scorebook-logic.js dist/
+
+      - name: Upload via FTPS
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          local-dir: ./dist/
+          server-dir: ./
+          dangerous-clean-slate: false
