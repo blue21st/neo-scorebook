@@ -6,6 +6,7 @@ on:
     paths:
       - "neo-scorebook.html"
       - "scorebook-logic.js"
+      - "neo-scorebook-icon*.png"
   workflow_dispatch:
 
 jobs:
@@ -23,6 +24,9 @@ jobs:
           mkdir -p dist
           cp neo-scorebook.html dist/
           cp scorebook-logic.js dist/
+          cp neo-scorebook-icon.png dist/
+          cp neo-scorebook-icon-180.png dist/
+          cp neo-scorebook-icon-32.png dist/
 
       - name: Upload via FTPS
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
