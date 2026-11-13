@@ -4,7 +4,25 @@
       "Bash(git checkout *)",
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(grep -n \"X,\\\\|, X\\\\|{X}\\\\|ChevronRight\\\\|lucide\\\\|Lucide\" /Users/aoyamahiroya/claude/neo-scorebook/neo-scorebook.html)",
+      "Bash(open /Users/aoyamahiroya/claude/neo-scorebook/neo-scorebook.html)",
+      "Bash(ipconfig getifaddr *)",
+      "Bash(python3 -m http.server 8080 --directory /Users/aoyamahiroya/claude/neo-scorebook)",
+      "Bash(git -C /Users/aoyamahiroya/claude diff HEAD~1 -- neo-scorebook/neo-scorebook.html)",
+      "Bash(lsof -iTCP -sTCP:LISTEN -nP)",
+      "Bash(brew install *)",
+      "Bash(pdftotext /Users/aoyamahiroya/claude/reference/公認野球規則_記録について_officialrule_900.pdf -)",
+      "Bash(mv ~/Downloads/review-design.md /Users/aoyamahiroya/claude/.claude/commands/)",
+      "Bash(mv ~/Downloads/design-reviewer.md /Users/aoyamahiroya/claude/.claude/agents/)",
+      "Bash(node -e ' *)",
+      "Bash(python3 -m http.server 8080)",
+      "Bash(python3 -m http.server 8081 --directory /Users/aoyamahiroya/claude/neo-scorebook)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8081/neo-scorebook.html)",
+      "Bash(awk -F: '$1 >= 1739 && $1 <= 3621')",
+      "Bash(python3 -m http.server 8082 --directory /Users/aoyamahiroya/claude/neo-scorebook)",
+      "Bash(lsof -ti:8082)",
+      "Bash(ps -p 20772 -o command=)"
     ]
   }
 }
