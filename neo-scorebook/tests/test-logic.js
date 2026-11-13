@@ -1,13 +1,13 @@
 /**
  * test-logic.js  — scorebook-logic.js のユニットテスト
- * 実行: node test-logic.js
+ * 実行: (neo-scorebook/ で) node tests/test-logic.js
  */
 const assert = require('assert');
 const {
   isOutResult, isStrikeout, isDoublePlay, isTriplePlay,
   atBatRunnerOuts, countAtBatOuts,
   replayBSO, calcStatsFromLog, calcScoreFromLog,
-} = require('./scorebook-logic.js');
+} = require('../scorebook-logic.js');
 
 let passed = 0, failed = 0;
 
@@ -392,6 +392,14 @@ test('被安打 → pHits=1', () => {
   const log = [mkHalf("裏",1,[mkAb(10,"A","ヒット",{pitcher:18})])];
   const { pitching } = calcStatsFromLog(log, true);
   assert.strictEqual(pitching.find(p=>p.number===18).pHits, 1);
+});
+
+test('背番号0の投手も成績が記録される（0はfalsyだが未設定ではない）', () => {
+  const log = [mkHalf("裏",1,[mkAb(10,"A","三振",{pitcher:0})])];
+  const { pitching } = calcStatsFromLog(log, true);
+  const ps = pitching.find(p=>p.number===0);
+  assert.ok(ps, '背番号0の投手成績が存在する');
+  assert.strictEqual(ps.strikeouts, 1);
 });
 
 test('失点が投手に加算される', () => {

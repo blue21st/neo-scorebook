@@ -1,8 +1,8 @@
 /**
  * test-game.js — 3イニング全打席 Playwright フルゲームテスト
- * 実行: node test-game.js
+ * 実行: (neo-scorebook/ で) node tests/test-game.js
  *
- * 前提: python3 -m http.server 8082 がポート8082で稼働中
+ * 前提: neo-scorebook/ で python3 -m http.server 8082 がポート8082で稼働中
  *       nsb_players にチームが1件以上登録済み
  *
  * シナリオ (表2-裏0):
@@ -382,25 +382,32 @@ const GAME_SCRIPT = [
         await prevOrderText.first().click();
         await page.waitForTimeout(1000);
         ok('前回のオーダーを適用');
-        // バリデーションエラー検出: ポジション "-" の select を実ポジションに修正
+        // バリデーションエラー検出: ポジション "-" と重複を実ポジションに修正
+        // （前回試合に交代記録があると同一ポジションが2人になることがある）
         const fixed = await page.evaluate(() => {
+          const POSITIONS = ['投','捕','一','二','三','遊','左','中','右','DH'];
+          const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
+          const posSelects = [...document.querySelectorAll('select')].filter(sel => {
+            const opts = [...sel.options].map(o => o.value);
+            return opts.includes('投') && opts.length === 11; // 守備位置 select のみ
+          });
+          const seen = new Set();
           let n = 0;
-          for (const sel of document.querySelectorAll('select')) {
-            if (sel.value === '-') {
-              const opts = [...sel.options].map(o => o.value);
-              if (opts.includes('投')) { // 守備位置 select（投/捕/一..が選択肢に含まれる）
-                const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
-                setter.call(sel, '中');
-                sel.dispatchEvent(new Event('change', { bubbles: true }));
-                n++;
-              }
-            }
+          for (const sel of posSelects) {
+            let v = sel.value;
+            if (v !== '-' && !seen.has(v)) { seen.add(v); continue; }
+            const free = POSITIONS.find(p => !seen.has(p));
+            if (!free) continue;
+            setter.call(sel, free);
+            sel.dispatchEvent(new Event('change', { bubbles: true }));
+            seen.add(free);
+            n++;
           }
           return n;
         });
         if (fixed > 0) {
           await page.waitForTimeout(400);
-          ok(`前回オーダーのバリデーションエラー修正: ${fixed}件 "-"→"中"`);
+          ok(`前回オーダーのポジション自動修正: ${fixed}件（"-"/重複を解消）`);
         }
       } else {
         fail('オーダー設定ボタンが見つからない（選手未登録の可能性）');

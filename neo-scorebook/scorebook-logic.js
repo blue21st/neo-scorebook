@@ -145,7 +145,7 @@ const calcStatsFromLog = (gameLog, isTop) => {
     if ((half.topBottom === "表") === isTop) return;
     half.atBats.forEach(ab => {
       const r = ab.result;
-      if (!r || !ab.pitcherNumber) return;
+      if (!r || ab.pitcherNumber == null) return;
       if (!pitcherStats[ab.pitcherNumber]) {
         const info = teamRegistry[ab.pitcherNumber]
           || { number: ab.pitcherNumber, name: `#${ab.pitcherNumber}`, order: 99, pos: "投" };

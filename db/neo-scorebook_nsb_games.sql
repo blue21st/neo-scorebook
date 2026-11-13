@@ -8,6 +8,9 @@ CREATE TABLE IF NOT EXISTS nsb_games (
   team_name     text NOT NULL,
   opponent      text NOT NULL,
   game_date     date NOT NULL DEFAULT CURRENT_DATE,
+  season        integer,
+  game_type     text CHECK (game_type IN ('公式戦', '練習試合')),
+  tournament    text,
   status        text NOT NULL CHECK (status IN ('completed', 'in_progress', 'cold')),
   score_my      integer NOT NULL DEFAULT 0,
   score_opp     integer NOT NULL DEFAULT 0,
@@ -18,6 +21,11 @@ CREATE TABLE IF NOT EXISTS nsb_games (
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now()
 );
+
+-- 既存テーブルへのカラム追加（既に CREATE した環境用）
+-- ALTER TABLE nsb_games ADD COLUMN IF NOT EXISTS season     integer;
+-- ALTER TABLE nsb_games ADD COLUMN IF NOT EXISTS game_type  text CHECK (game_type IN ('公式戦', '練習試合'));
+-- ALTER TABLE nsb_games ADD COLUMN IF NOT EXISTS tournament text;
 
 -- 更新日時の自動更新トリガー
 CREATE OR REPLACE FUNCTION set_updated_at()

@@ -31,7 +31,12 @@
   <script type="text/babel">
     const { useState, useRef, useEffect } = React;
 
-    const APP_VERSION = "v2026.08.11-5";
+    const APP_VERSION = "v2026.11.14-1";
+
+    // 開発環境判定：ローカル（localhost / LAN内IP / file://）で開いたときだけ true。
+    // 本番（baseball.versus.jp）では false になり、開発用の仮データは使われない。
+    const IS_DEV = ["localhost", "127.0.0.1", ""].includes(location.hostname)
+      || /^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(location.hostname);
 
     // Supabase接続
     const SUPABASE_URL = "https://zorxexynepvbaajblsfm.supabase.co";
@@ -172,7 +177,7 @@ const C = {
 };
 
 const TEAM_A = "阪神";
-const TEAM_B = "巨人";
+const TEAM_B = "阪神"; // 開発時の相手チームデフォルトも阪神の選手にしておく（本番は実オーダー登録で上書きされる）
 
 const BATTERS_A = [
   { order: 1, number: 1,  name: "近本 光司",  pos: "センター" },
@@ -185,19 +190,9 @@ const BATTERS_A = [
   { order: 8, number: 27, name: "坂本 誠志郎", pos: "キャッチャー" },
   { order: 9, number: 18, name: "青柳 晃洋",  pos: "ピッチャー" },
 ];
-const BATTERS_B = [
-  { order: 1, number: 7,  name: "丸 佳浩",   pos: "センター" },
-  { order: 2, number: 6,  name: "吉川 尚輝",  pos: "セカンド" },
-  { order: 3, number: 3,  name: "岡本 和真",  pos: "ファースト" },
-  { order: 4, number: 25, name: "ブリンソン",  pos: "ライト" },
-  { order: 5, number: 55, name: "秋広 優人",  pos: "サード" },
-  { order: 6, number: 9,  name: "坂本 勇人",  pos: "ショート" },
-  { order: 7, number: 34, name: "オコエ 瑠偉", pos: "レフト" },
-  { order: 8, number: 32, name: "大城 卓三",  pos: "キャッチャー" },
-  { order: 9, number: 17, name: "菅野 智之",  pos: "ピッチャー" },
-];
+const BATTERS_B = BATTERS_A;
 const PITCHER_A = { number: 18, name: "青柳 晃洋" };
-const PITCHER_B = { number: 17, name: "菅野 智之" };
+const PITCHER_B = PITCHER_A;
 
 const BASE_NAMES = { 1: "1塁", 2: "2塁", 3: "3塁", 4: "ホーム（得点）" };
 const LINEUP_SIZE   = 9;
@@ -590,7 +585,7 @@ function HistoryView({ gameLog, teamNameA, teamNameB, substitutions = [], gameSt
 // ── メインコンポーネント ──
 const isPitcher = (pos) => pos === "ピッチャー" || pos === "投";
 
-function StatsView({ gameLog, teamNameA, teamNameB }) {
+function StatsView({ gameLog, teamNameA, teamNameB, lineupA = [], lineupB = [] }) {
   const [tab, setTab] = useState("batter");
 
   // gameLogから打者・投手成績を集計（実装は scorebook-logic.js の calcStatsFromLog に一本化）
@@ -598,6 +593,22 @@ function StatsView({ gameLog, teamNameA, teamNameB }) {
 
   const statsA = React.useMemo(() => calcStats(true),  [gameLog]);
   const statsB = React.useMemo(() => calcStats(false), [gameLog]);
+
+  // まだ打席が回っていないオーダー登録済み選手も0成績で表示する
+  const mergeLineupBatting = (batting, lineup) => {
+    const seen = new Set(batting.map(b => b.number));
+    const zeroRows = lineup
+      .filter(p => p.order != null && !seen.has(p.number))
+      .map(p => ({
+        playerId: p.playerId ?? null, number: p.number, name: p.name, order: p.order, pos: p.pos,
+        pa: 0, atBats: 0, hits: 0, rbi: 0, hr: 0, sb: 0,
+        bb: 0, ibb: 0, hbp: 0, so: 0, sac: 0, sf: 0,
+        h1: 0, h2: 0, h3: 0, tb: 0, run: 0, risp_ab: 0, risp_hit: 0,
+      }));
+    return [...batting, ...zeroRows].sort((a, b) => a.order - b.order);
+  };
+  const battingA = React.useMemo(() => mergeLineupBatting(statsA.batting, lineupA), [statsA, lineupA]);
+  const battingB = React.useMemo(() => mergeLineupBatting(statsB.batting, lineupB), [statsB, lineupB]);
   const gameAvg  = (h, ab) => ab === 0 ? "-" : (h / ab).toFixed(3).replace("0.", ".");
   const gameOBP  = (b) => {
     const denom = b.atBats + (b.bb||0) + (b.ibb||0) + (b.hbp||0) + (b.sf||0);
@@ -624,8 +635,8 @@ function StatsView({ gameLog, teamNameA, teamNameB }) {
     rbi: acc.rbi + b.rbi, hr: acc.hr + b.hr, sb: acc.sb + b.sb,
   }), { pa: 0, atBats: 0, hits: 0, rbi: 0, hr: 0, sb: 0 });
 
-  const totalsA = calcTotals(statsA.batting);
-  const totalsB = calcTotals(statsB.batting);
+  const totalsA = calcTotals(battingA);
+  const totalsB = calcTotals(battingB);
 
   const BatterTable = ({ stats, totals, teamName }) => (
     <>
@@ -713,9 +724,9 @@ function StatsView({ gameLog, teamNameA, teamNameB }) {
 
       {/* 打者成績 */}
       {tab === "batter" && <>
-        <BatterTable stats={statsA.batting} totals={totalsA} teamName={teamNameA}/>
+        <BatterTable stats={battingA} totals={totalsA} teamName={teamNameA}/>
         <div style={{ height: 8, background: C.bg }}/>
-        <BatterTable stats={statsB.batting} totals={totalsB} teamName={teamNameB}/>
+        <BatterTable stats={battingB} totals={totalsB} teamName={teamNameB}/>
       </>}
 
       {/* 投手成績 */}
@@ -1589,11 +1600,27 @@ function OpponentOrderRow({ row, idx, onNameChange, onNumberChange, onPosChange,
 }
 
 // ── 相手チームタブ ──
+// 開発時（IS_DEV）だけ使う相手チームオーダーのデフォルト値（阪神の選手）。本番では空のオーダーから始まる
+const DEV_DEFAULT_OPP_TEAM = "阪神";
+const DEV_DEFAULT_OPP_LINEUP = [
+  { order: 1, number: "1",  name: "近本 光司",   pos: "中" },
+  { order: 2, number: "8",  name: "中野 拓夢",   pos: "二" },
+  { order: 3, number: "99", name: "森下 翔太",   pos: "右" },
+  { order: 4, number: "6",  name: "大山 悠輔",   pos: "一" },
+  { order: 5, number: "5",  name: "佐藤 輝明",   pos: "三" },
+  { order: 6, number: "44", name: "ノイジー",    pos: "左" },
+  { order: 7, number: "2",  name: "木浪 聖也",   pos: "遊" },
+  { order: 8, number: "27", name: "坂本 誠志郎", pos: "捕" },
+  { order: 9, number: "18", name: "青柳 晃洋",   pos: "投" },
+];
+
 function OpponentTab({ onLineupChange, onBenchChange, onTeamNameChange }) {
-  const [step, setStep] = useState("select");
-  const [teamName, setTeamName] = useState("");
+  const [step, setStep] = useState(IS_DEV ? "order" : "select");
+  const [teamName, setTeamName] = useState(IS_DEV ? DEV_DEFAULT_OPP_TEAM : "");
   const [lineup, setLineup] = useState(
-    Array.from({ length: LINEUP_SIZE }, (_, i) => ({ order: i + 1, number: "", name: "", pos: "-" }))
+    IS_DEV
+      ? DEV_DEFAULT_OPP_LINEUP.map(r => ({ ...r }))
+      : Array.from({ length: LINEUP_SIZE }, (_, i) => ({ order: i + 1, number: "", name: "", pos: "-" }))
   );
   const [bench, setBench] = useState([]);
   const [dhPitcher, setDhPitcher] = useState({ number: "", name: "" }); // DH制度：打順に入らない先発投手
@@ -1643,6 +1670,13 @@ function OpponentTab({ onLineupChange, onBenchChange, onTeamNameChange }) {
     const outLineup = buildLineupWithPitcher(nl, pitcher);
     if (onLineupChange) onLineupChange(outLineup.map(r => ({ ...r, number: parseInt(r.number) || 0, name: r.name.trim() })));
   };
+
+  // 開発時のみ：デフォルト表示中のオーダーを親state（oppLineup/oppTeamName）にも反映しておく
+  useEffect(() => {
+    if (!IS_DEV) return;
+    if (onTeamNameChange) onTeamNameChange(teamName);
+    notify(lineup);
+  }, []);
 
   const notifyBench = (bl) => {
     if (onBenchChange) onBenchChange(bl.map(r => ({ ...r, number: parseInt(r.number) || 0, name: r.name.trim() })));
@@ -2529,6 +2563,50 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
   const scoreB = React.useMemo(() =>
     gameLog.filter(h => h.topBottom === "裏").flatMap(h => h.atBats).reduce((s, ab) => s + (ab.runsScored || 0), 0),
     [gameLog]
+  );
+
+  // イニングごとの得点を表示するスコアボード（記録画面・試合終了サマリーで共用）
+  const Scoreboard = () => (
+    <div style={{ padding: "0 14px" }}>
+      <div style={{ display: "flex", borderBottom: `1px solid ${C.divider}` }}>
+        <div style={{ width: 64, fontSize: 10, color: C.textTer, padding: "5px 0", flexShrink: 0 }}>チーム</div>
+        {Array.from({ length: LINEUP_SIZE }).map((_, i) => (
+          <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 10, color: i + 1 === inning ? C.brand : C.textTer, fontWeight: i + 1 === inning ? 700 : 400, padding: "5px 0" }}>{i + 1}</div>
+        ))}
+        <div style={{ width: 32, textAlign: "center", fontSize: 10, fontWeight: 700, color: C.textPri, padding: "5px 0", flexShrink: 0 }}>計</div>
+      </div>
+      {[
+        { name: activeTeamA, isTop: true,  score: scoreA },
+        { name: oppTeamName, isTop: false, score: scoreB },
+      ].map(team => {
+        const inningScores = {};
+        gameLog.forEach(half => {
+          if ((half.topBottom === "表") !== team.isTop) return;
+          const runs = half.atBats.reduce((s, ab) => s + (ab.runsScored || 0), 0);
+          inningScores[half.inning] = (inningScores[half.inning] || 0) + runs;
+        });
+        return (
+          <div key={team.name} style={{ display: "flex", borderBottom: `1px solid ${C.divider}` }}>
+            <div style={{ width: 64, fontSize: 11, fontWeight: 600, color: C.textPri, padding: "6px 0", flexShrink: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{team.name}</div>
+            {Array.from({ length: LINEUP_SIZE }).map((_, i) => {
+              const started = i + 1 < inning || (i + 1 === inning && (!isTop || team.isTop));
+              const isCurrent = i + 1 === inning && started;
+              const val = inningScores[i+1];
+              return (
+                <div key={i} style={{
+                  flex: 1, textAlign: "center", fontSize: 12, padding: "6px 0",
+                  color: val > 0 ? C.brand : isCurrent ? C.textPri : C.textTer,
+                  fontWeight: val > 0 ? 700 : 400,
+                }}>
+                  {val !== undefined ? val : (started ? 0 : "-")}
+                </div>
+              );
+            })}
+            <div style={{ width: 32, textAlign: "center", fontSize: 13, fontWeight: 800, color: C.textPri, padding: "6px 0", flexShrink: 0 }}>{team.score}</div>
+          </div>
+        );
+      })}
+    </div>
   );
   // 表示・保存用: 常に自チームを参照（scoreA/scoreB の後に定義）
   const myScore  = batting === "後攻" ? scoreB : scoreA;
@@ -3456,7 +3534,7 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
                     )}
                   </div>
                   <div style={{ textAlign:"right", opacity: oppBatting ? 1 : 0.4, transition:"opacity 0.2s", minWidth:80 }}>
-                    <div style={{ ...nameStyle(oppBatting), display:"block", textAlign:"right" }}>
+                    <div style={{ ...nameStyle(oppBatting), display:"block", textAlign:"right", borderBottom:"none", paddingBottom:0 }}>
                       <span style={{ display:"inline-block", borderBottom: oppBatting ? `2px solid ${C.scoreSubText}` : "2px solid transparent", paddingBottom:1 }}>{oppTeamNameRaw}</span>
                     </div>
                     <div style={{ color:C.scoreText, fontSize: oppBatting ? 36 : 28, fontWeight:800, lineHeight:1 }}>{oppScore}</div>
@@ -3490,7 +3568,7 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
 
           {/* 成績ビュー */}
           {activeView === "stats" && (
-            <StatsView gameLog={gameLog} teamNameA={activeTeamA} teamNameB={oppTeamName}/>
+            <StatsView gameLog={gameLog} teamNameA={activeTeamA} teamNameB={oppTeamName} lineupA={activeBattersA} lineupB={activeBattersB}/>
           )}
 
           {activeView === "settings" && (
@@ -3583,6 +3661,10 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
                       <div style={{ fontSize:44, fontWeight:900, color:C.scoreText, lineHeight:1 }}>{oppScore}</div>
                     </div>
                   </div>
+                </div>
+                {/* イニングごとのスコアボード */}
+                <div style={{ background:C.card, borderRadius:12, border:`1px solid ${C.divider}`, overflow:"hidden" }}>
+                  <Scoreboard/>
                 </div>
                 {/* 試合情報 */}
                 <div style={{ padding:"12px 14px", background:C.card, borderRadius:12, border:`1px solid ${C.divider}`, display:"flex", flexDirection:"column", gap:5 }}>
@@ -3781,45 +3863,8 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
               </div>
 
               {/* スコアボード */}
-              <div style={{ borderTop: `1px solid ${C.divider}`, padding: "0 14px" }}>
-                <div style={{ display: "flex", borderBottom: `1px solid ${C.divider}` }}>
-                  <div style={{ width: 64, fontSize: 10, color: C.textTer, padding: "5px 0", flexShrink: 0 }}>チーム</div>
-                  {Array.from({ length: LINEUP_SIZE }).map((_, i) => (
-                    <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 10, color: i + 1 === inning ? C.brand : C.textTer, fontWeight: i + 1 === inning ? 700 : 400, padding: "5px 0" }}>{i + 1}</div>
-                  ))}
-                  <div style={{ width: 32, textAlign: "center", fontSize: 10, fontWeight: 700, color: C.textPri, padding: "5px 0", flexShrink: 0 }}>計</div>
-                </div>
-                {[
-                  { name: activeTeamA, isTop: true,  score: scoreA },
-                  { name: oppTeamName, isTop: false, score: scoreB },
-                ].map(team => {
-                  const inningScores = {};
-                  gameLog.forEach(half => {
-                    if ((half.topBottom === "表") !== team.isTop) return;
-                    const runs = half.atBats.reduce((s, ab) => s + (ab.runsScored || 0), 0);
-                    inningScores[half.inning] = (inningScores[half.inning] || 0) + runs;
-                  });
-                  return (
-                    <div key={team.name} style={{ display: "flex", borderBottom: `1px solid ${C.divider}` }}>
-                      <div style={{ width: 64, fontSize: 11, fontWeight: 600, color: C.textPri, padding: "6px 0", flexShrink: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{team.name}</div>
-                      {Array.from({ length: LINEUP_SIZE }).map((_, i) => {
-                        const started = i + 1 < inning || (i + 1 === inning && (!isTop || team.isTop));
-                        const isCurrent = i + 1 === inning && started;
-                        const val = inningScores[i+1];
-                        return (
-                          <div key={i} style={{
-                            flex: 1, textAlign: "center", fontSize: 12, padding: "6px 0",
-                            color: val > 0 ? C.brand : isCurrent ? C.textPri : C.textTer,
-                            fontWeight: val > 0 ? 700 : 400,
-                          }}>
-                            {val !== undefined ? val : (started ? 0 : "-")}
-                          </div>
-                        );
-                      })}
-                      <div style={{ width: 32, textAlign: "center", fontSize: 13, fontWeight: 800, color: C.textPri, padding: "6px 0", flexShrink: 0 }}>{team.score}</div>
-                    </div>
-                  );
-                })}
+              <div style={{ borderTop: `1px solid ${C.divider}` }}>
+                <Scoreboard/>
               </div>
             </>}
 
