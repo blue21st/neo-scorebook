@@ -32,7 +32,7 @@
     const { useState, useRef, useEffect } = React;
 
     // /test/ 配下（試験用の配置）で開いたときは、本番と取り違えないよう「テスト版」と表示する
-    const APP_VERSION = "v2026.11.23-3" + (location.pathname.includes("/test/") ? "（テスト版）" : "");
+    const APP_VERSION = "v2026.11.23-4" + (location.pathname.includes("/test/") ? "（テスト版）" : "");
 
     // 開発環境判定：ローカル（localhost / LAN内IP / file://）で開いたときだけ true。
     // 本番（baseball.versus.jp）では false になり、開発用の仮データは使われない。
@@ -3153,6 +3153,21 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
     }
     if (isA) setCurrentLineupA(newLineup); else setCurrentLineupB(newLineup);
     setRunners(newRunners);
+    // 守備側の投手が替わったとき、進行中の打席（作成済み）の投手を新投手に付け替える。
+    // 打席は直前の打席終了時に作られるため、そのままだと交代後の打者のアウト・安打などが前の投手に付いてしまう。
+    if (isA !== isTop) {
+      const newP = newLineup.find(p => p.pos === "投");
+      if (newP) {
+        setGameLog(log => log.map((h, hi) =>
+          hi !== currentHalfIdx ? h : {
+            ...h,
+            atBats: h.atBats.map((ab, ai) =>
+              (ai !== currentAtBatIdx || ab.result) ? ab : { ...ab, pitcherNumber: newP.number, pitcherPlayerId: newP.playerId ?? null }
+            )
+          }
+        ));
+      }
+    }
     const pinchHit = pendingSubs.find(s => s.type === "代打");
     if (pinchHit) {
       setGameLog(log => log.map((h, hi) =>
