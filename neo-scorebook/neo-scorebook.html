@@ -32,7 +32,7 @@
     const { useState, useRef, useEffect } = React;
 
     // /test/ 配下（試験用の配置）で開いたときは、本番と取り違えないよう「テスト版」と表示する
-    const APP_VERSION = "v2026.11.23-2" + (location.pathname.includes("/test/") ? "（テスト版）" : "");
+    const APP_VERSION = "v2026.11.23-3" + (location.pathname.includes("/test/") ? "（テスト版）" : "");
 
     // 開発環境判定：ローカル（localhost / LAN内IP / file://）で開いたときだけ true。
     // 本番（baseball.versus.jp）では false になり、開発用の仮データは使われない。
@@ -3418,7 +3418,7 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
       doOut(nextRunners, undefined, false);
     } else if (action === "牽制セーフ") {
       addEvent(`${baseLabel}ランナー 牽制セーフ`); showToast("牽制セーフ");
-    } else if (action === "WP進塁" || action === "PB進塁" || action === "その他進塁") {
+    } else if (action === "WP進塁" || action === "PB進塁" || action === "ボールデッド進塁" || action === "その他進塁") {
       const runner = runners[base];
       addEvent(withComment(`${baseLabel}ランナー #${runner?.number ?? "?"} ${action}`));
       const nextRunners = { ...runners, [base]: null };
@@ -4098,6 +4098,7 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
                 <Btn label="盗塁死"    bg="#F5EAEA" border="#8B2020" color="#8B2020" onClick={() => handleBaseAction("盗塁死")}/>
                 <Btn label="WP進塁"    bg="#F1EFE8" border="#9B9A94" color="#3A3A38" onClick={() => handleBaseAction("WP進塁")}/>
                 <Btn label="PB進塁"    bg="#F1EFE8" border="#9B9A94" color="#3A3A38" onClick={() => handleBaseAction("PB進塁")}/>
+                <Btn label="ボールデッド進塁" bg="#F1EFE8" border="#9B9A94" color="#3A3A38" onClick={() => handleBaseAction("ボールデッド進塁")}/>
                 <Btn label="その他進塁" bg="#F1EFE8" border="#9B9A94" color="#3A3A38" onClick={() => setBaseActionComment({ action:"その他進塁", text:"" })}/>
                 <Btn label="牽制セーフ" bg="#F1EFE8" border="#9B9A94" color="#3A3A38" onClick={() => handleBaseAction("牽制セーフ")}/>
                 <Btn label="牽制アウト" bg="#F5EAEA" border="#8B2020" color="#8B2020" onClick={() => handleBaseAction("牽制アウト")}/>
