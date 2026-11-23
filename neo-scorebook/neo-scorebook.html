@@ -32,7 +32,7 @@
     const { useState, useRef, useEffect } = React;
 
     // /test/ 配下（試験用の配置）で開いたときは、本番と取り違えないよう「テスト版」と表示する
-    const APP_VERSION = "v2026.11.23-1" + (location.pathname.includes("/test/") ? "（テスト版）" : "");
+    const APP_VERSION = "v2026.11.23-2" + (location.pathname.includes("/test/") ? "（テスト版）" : "");
 
     // 開発環境判定：ローカル（localhost / LAN内IP / file://）で開いたときだけ true。
     // 本番（baseball.versus.jp）では false になり、開発用の仮データは使われない。
@@ -222,6 +222,7 @@ const SUB_STEPS = {
   PINCH_HIT_IN:"pinch_hit_in", PINCH_HIT_POS:"pinch_hit_pos",
   PINCH_RUN_BASE:"pinch_run_base", PINCH_RUN_IN:"pinch_run_in",
   POSSWAP:"posswap", POSSWAP2:"posswap2", CONFIRM:"posswap_confirm",
+  CHAIN:"chain",
 };
 
 // OUT_KEYWORDS / NON_OUT_KEYWORDS / isOutResult / isStrikeout / isDoublePlay / isTriplePlay /
@@ -360,6 +361,7 @@ function HistoryView({ gameLog, teamNameA, teamNameB, substitutions = [], gameSt
         return `${bl}走者 ${s.outName} →代走: ${s.inName}`;
       }
       case "ポジションチェンジ": return `守備変更: ${s.outName}・${s.inName} ポジションチェンジ`;
+      case "守備位置変更":   return `守備変更: ${s.outName} ${s.outPos ?? ""}→${s.newPos}`;
       default: return `守備交代: ${s.outName} → ${s.inName}`;
     }
   };
@@ -2102,6 +2104,10 @@ function SubstitutionModal({
   const subBench    = subTeam === "top" ? benchA : benchB;
   const subTeamName = subTeam === "top" ? activeTeamA : oppTeamName;
   const POSITIONS   = ["投","捕","一","二","三","遊","左","中","右","DH","-"];
+  // 守備位置の一括変更（玉突き交代）用の一時state: スロット番号 → 新ポジション / ベンチ選手
+  const [chainPos,   setChainPos]   = useState({});
+  const [chainBench, setChainBench] = useState({});
+  const [chainSel,   setChainSel]   = useState(null);
 
   // 競合チェック: pendingSubs + 過去の substitutions から使用済み情報を収集
   const usedInNumbers = new Set([
@@ -2194,6 +2200,7 @@ function SubstitutionModal({
       case SUB_STEPS.POSSWAP:       return "1人目を選んでください";
       case SUB_STEPS.POSSWAP2:      return "2人目を選んでください";
       case SUB_STEPS.CONFIRM:       return "ポジションチェンジ確認";
+      case SUB_STEPS.CHAIN:         return "守備位置を一括変更";
       default: return "選手交代";
     }
   };
@@ -2205,12 +2212,13 @@ function SubstitutionModal({
       case "代走":           return `${bl[s.base]}走者 ${s.outName} →代走: ${s.inName}`;
       case "投手交代":       return `投手交代: ${s.outName} → ${s.inName}`;
       case "ポジションチェンジ": return `${s.outName}(${s.outPos}) ⇄ ${s.inName}(${s.inPos})`;
+      case "守備位置変更":   return `${s.outName}: ${s.outPos} → ${s.newPos}`;
       default:               return `守備交代: ${s.outName} → ${s.inName}`;
     }
   };
 
   const typeChip = (type) => {
-    const map = { "代打":"#1565C0", "代走":"#6A1B9A", "投手交代":C.brand, "守備交代":C.brand, "ポジションチェンジ":"#E65100" };
+    const map = { "代打":"#1565C0", "代走":"#6A1B9A", "投手交代":C.brand, "守備交代":C.brand, "ポジションチェンジ":"#E65100", "守備位置変更":"#E65100" };
     return <span style={{ fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:20,
       background: (map[type]||C.brand)+"22", color: map[type]||C.brand }}>{type}</span>;
   };
@@ -2273,8 +2281,9 @@ function SubstitutionModal({
                   { type:"代打",     desc:`現在の打者(${batter?.name})をベンチ選手と交代`, next: SUB_STEPS.PINCH_HIT_IN,  disabled: !isAttackingTeam },
                   { type:"代走",     desc:"塁上のランナーをベンチ選手と交代",               next: SUB_STEPS.PINCH_RUN_BASE, disabled: !hasRunner },
                   { type:"ポジションチェンジ", desc:"出場中の選手の守備位置を変える",        next: SUB_STEPS.POSSWAP,        disabled:false },
-                ].map(({ type, desc, next, disabled }) => (
-                  <div key={type} onClick={disabled ? undefined : () => setSubStep(next)}
+                  { type:"守備位置を一括変更", desc:"玉突き交代：全員の守備位置を一覧で変更（ベンチ選手の投入も可）", next: SUB_STEPS.CHAIN, disabled:false, reset:true },
+                ].map(({ type, desc, next, disabled, reset }) => (
+                  <div key={type} onClick={disabled ? undefined : () => { if (reset) { setChainPos({}); setChainBench({}); setChainSel(null); } setSubStep(next); }}
                     style={{ padding:"12px 16px", borderRadius:12, background:C.bg, border:`1.5px solid ${C.divider}`,
                       cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.4 : 1,
                       display:"flex", justifyContent:"space-between", alignItems:"center" }}>
@@ -2418,6 +2427,102 @@ function SubstitutionModal({
                   リストに追加
                 </div>
                 {backBtn(() => setSubStep(SUB_STEPS.POSSWAP2))}
+              </div>
+            );
+          })()}
+          {/* 守備位置の一括変更（玉突き交代） */}
+          {subStep === SUB_STEPS.CHAIN && (() => {
+            const FIELD = ["投","捕","一","二","三","遊","左","中","右"];
+            const rows = subLineup.map((p, i) => {
+              const bench = chainBench[i] || null;
+              const pos = chainPos[i] ?? p.pos;
+              const changed = !!bench || pos !== p.pos;
+              return { p, i, bench, pos, changed, locked: usedOutSlots.has(i) || usedSwapSlots.has(i) };
+            });
+            const posCount = {};
+            rows.forEach(r => { if (FIELD.includes(r.pos)) posCount[r.pos] = (posCount[r.pos] || 0) + 1; });
+            const dups    = FIELD.filter(x => posCount[x] > 1);
+            const missing = FIELD.filter(x => !posCount[x]);
+            const anyChange = rows.some(r => r.changed);
+            const canGo = anyChange && dups.length === 0;
+            const benchUsedHere = new Set(Object.values(chainBench).filter(Boolean).map(b => b.number));
+            const benchAvail = subBench.filter(b => !usedInNumbers.has(b.number) && !benchUsedHere.has(b.number));
+            const setPos = (i, pos) => setChainPos(m => ({ ...m, [i]: pos }));
+            const confirm = () => {
+              const out = [];
+              rows.forEach(r => {
+                if (!r.changed) return;
+                if (r.bench) {
+                  out.push({ type: r.pos === "投" ? "投手交代" : "守備交代", slot: r.i,
+                    outNumber: r.p.number, outName: r.p.name,
+                    inNumber: r.bench.number, inName: r.bench.name,
+                    inPlayerId: r.bench.playerId ?? null, newPos: r.pos });
+                } else {
+                  out.push({ type: "守備位置変更", slot: r.i, outPos: r.p.pos, newPos: r.pos,
+                    outNumber: r.p.number, outName: r.p.name,
+                    inNumber: r.p.number, inName: r.p.name,
+                    inPlayerId: r.p.playerId ?? null });
+                }
+              });
+              setPendingSubs(ps => [...ps, ...out]);
+              setSubStep(SUB_STEPS.LIST);
+            };
+            const chip = (label, on, onClick, key, warn) => (
+              <div key={key} onClick={onClick}
+                style={{ padding:"8px 12px", borderRadius:10, fontSize:13, fontWeight:700, cursor:"pointer",
+                  background: on ? C.brand : C.card, color: on ? C.brandText : (warn ? "#C04040" : C.textPri),
+                  border:`1.5px solid ${on ? C.brand : (warn ? "#C04040" : C.divider)}` }}>{label}</div>
+            );
+            return (
+              <div style={{ padding:"0 12px" }}>
+                <div style={{ fontSize:11, color:C.textSec, margin:"0 4px 10px", lineHeight:1.6 }}>
+                  選手をタップして、新しい守備位置を選びます。ベンチから入れる場合は「ベンチと交代」から選手を選んでください。
+                </div>
+                {rows.map(r => {
+                  const sel = chainSel === r.i;
+                  const dup = FIELD.includes(r.pos) && posCount[r.pos] > 1;
+                  const nm  = r.bench ? r.bench.name : r.p.name;
+                  return (
+                    <div key={r.i} style={{ marginBottom:6, borderRadius:12, background: sel ? C.brandLight : C.bg,
+                      border:`1.5px solid ${sel ? C.brand : (dup ? "#C04040" : "transparent")}`, opacity: r.locked ? 0.35 : 1 }}>
+                      <div onClick={r.locked ? undefined : () => setChainSel(sel ? null : r.i)}
+                        style={{ display:"flex", alignItems:"center", padding:"11px 12px", gap:8, cursor: r.locked ? "default" : "pointer" }}>
+                        <div style={{ width:22, fontSize:11, fontWeight:800, color:C.brand, textAlign:"center" }}>{r.p.order ?? "投"}</div>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:14, fontWeight:700, color:C.textPri, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                            {r.bench ? <><span style={{ color:C.textTer, textDecoration:"line-through", fontWeight:500 }}>{r.p.name}</span> → {nm}</> : nm}
+                          </div>
+                        </div>
+                        <div style={{ fontSize:12, color:C.textSec }}>{r.p.pos}</div>
+                        <div style={{ fontSize:12, color:C.textTer }}>→</div>
+                        <div style={{ minWidth:30, textAlign:"center", fontSize:14, fontWeight:800, padding:"3px 8px", borderRadius:8,
+                          background: r.changed ? C.brand : C.card, color: r.changed ? C.brandText : C.textSec,
+                          border:`1px solid ${dup ? "#C04040" : (r.changed ? C.brand : C.divider)}` }}>{r.pos}</div>
+                      </div>
+                      {sel && (
+                        <div style={{ padding:"0 12px 12px" }}>
+                          <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:10 }}>
+                            {[...FIELD, "DH"].map(x => chip(x, r.pos === x, () => setPos(r.i, x), x))}
+                          </div>
+                          <div style={{ fontSize:11, color:C.textSec, marginBottom:6 }}>ベンチと交代（この打順に入る）</div>
+                          <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                            {chip("交代しない", !r.bench, () => setChainBench(m => ({ ...m, [r.i]: null })), "none")}
+                            {r.bench && chip(`#${r.bench.number} ${r.bench.name}`, true, () => {}, "cur")}
+                            {benchAvail.map(b => chip(`#${b.number} ${b.name}`, false, () => setChainBench(m => ({ ...m, [r.i]: b })), "b"+b.number))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {dups.length > 0 && <div style={{ fontSize:12, color:"#C04040", margin:"8px 4px", fontWeight:600 }}>守備位置が重複しています：{dups.join("・")}</div>}
+                {dups.length === 0 && anyChange && missing.length > 0 && <div style={{ fontSize:12, color:C.textSec, margin:"8px 4px" }}>空いている守備位置：{missing.join("・")}</div>}
+                <div onClick={canGo ? confirm : undefined}
+                  style={{ marginTop:12, padding:"16px", borderRadius:50, textAlign:"center", fontWeight:700, fontSize:14,
+                    background: canGo ? C.brand : C.divider, color: C.brandText, cursor: canGo ? "pointer" : "default" }}>
+                  リストに追加
+                </div>
+                {backBtn(() => setSubStep(SUB_STEPS.LIST))}
               </div>
             );
           })()}
@@ -3041,6 +3146,7 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
         slot1: sub.slot1 ?? null, slot2: sub.slot2 ?? null,
         outNumber: sub.outNumber, outName: sub.outName,
         inNumber: sub.inNumber, inName: sub.inName,
+        outPos: sub.outPos ?? null,
         newPos: sub.newPos ?? null,
         runnersSnapshot: { ...runners },
       });
@@ -3062,8 +3168,8 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
       ));
     }
     setSubstitutions(s => [...s, ...newSubRecords]);
-    const names = pendingSubs.map(s => s.inName).join("、");
-    showToast(`${names}が出場`);
+    const entering = pendingSubs.filter(s => s.type !== "守備位置変更");
+    showToast(entering.length > 0 ? `${entering.map(s => s.inName).join("、")}が出場` : "守備位置を変更しました");
     setPendingSubs([]);
     setShowSubModal(false);
   };
