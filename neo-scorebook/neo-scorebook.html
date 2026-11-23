@@ -32,7 +32,7 @@
     const { useState, useRef, useEffect } = React;
 
     // /test/ 配下（試験用の配置）で開いたときは、本番と取り違えないよう「テスト版」と表示する
-    const APP_VERSION = "v2026.11.14-2" + (location.pathname.includes("/test/") ? "（テスト版）" : "");
+    const APP_VERSION = "v2026.11.23-1" + (location.pathname.includes("/test/") ? "（テスト版）" : "");
 
     // 開発環境判定：ローカル（localhost / LAN内IP / file://）で開いたときだけ true。
     // 本番（baseball.versus.jp）では false になり、開発用の仮データは使われない。
@@ -3198,7 +3198,7 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
           const bso = replayBSO(pitches.slice(0, -1));
           setBalls(bso.balls);
           setStrikes(bso.strikes);
-          showToast("1球取消しました");
+          showToast("1球戻しました");
         } else {
           stepBackInEditMode();
         }
@@ -3223,7 +3223,7 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
     setStateHistory(h => h.slice(0, -1));
     setScreen("main");
     setHistory([]);
-    showToast("1球取消しました");
+    showToast("1球戻しました");
   };
 
   const handlePitch = (type) => {
@@ -3558,21 +3558,28 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
           {(() => {
             const myBatting  = batting === "先攻" ? isTop : !isTop;
             const oppBatting = !myBatting;
-            const nameStyle = (active) => ({
-              display: "inline-block",
-              color: C.scoreSubText, fontSize: 11, fontWeight: 600,
-              borderBottom: active ? `2px solid ${C.scoreSubText}` : "2px solid transparent",
-              paddingBottom: 1, marginBottom: 5,
-            });
+            // 先攻チームが左・後攻チームが右
+            const myIsFirst = batting === "先攻";
+            const L = myIsFirst
+              ? { name: myTeamNameRaw,  score: myScore,  active: myBatting }
+              : { name: oppTeamNameRaw, score: oppScore, active: oppBatting };
+            const R = myIsFirst
+              ? { name: oppTeamNameRaw, score: oppScore, active: oppBatting }
+              : { name: myTeamNameRaw,  score: myScore,  active: myBatting };
+            // 攻撃中の印：チーム名の横の小さな丸
+            const mark = (active) => (
+              <span style={{ display:"inline-block", width:7, height:7, borderRadius:"50%", background: active ? C.scoreText : "transparent", margin:"0 6px 1px", verticalAlign:"middle" }}/>
+            );
+            const nameStyle = { color: C.scoreSubText, fontSize: 11, fontWeight: 600, marginBottom: 5, whiteSpace:"nowrap" };
             return (
               <div style={{ background: C.scoreBg, padding:"12px 16px 14px" }}>
                 <div style={{ fontSize:9, color:C.scoreSubText, textAlign:"center", letterSpacing:"0.15em", marginBottom:8, opacity:0.9, fontWeight:500 }}>
                   {isEditMode && gameStatus !== "completed" && gameStatus !== "cold" ? "✎ 編集モード" : "NEO SCORE BOOK"}
                 </div>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                  <div style={{ opacity: myBatting ? 1 : 0.4, transition:"opacity 0.2s", minWidth:80 }}>
-                    <div style={nameStyle(myBatting)}>{myTeamNameRaw}</div>
-                    <div style={{ color:C.scoreText, fontSize: myBatting ? 36 : 28, fontWeight:800, lineHeight:1 }}>{myScore}</div>
+                  <div style={{ opacity: L.active ? 1 : 0.4, transition:"opacity 0.2s", minWidth:80 }}>
+                    <div style={nameStyle}>{mark(L.active)}{L.name}</div>
+                    <div style={{ color:C.scoreText, fontSize: L.active ? 36 : 28, fontWeight:800, lineHeight:1 }}>{L.score}</div>
                   </div>
                   <div style={{ textAlign:"center" }}>
                     {gameStatus === "completed" || gameStatus === "cold" ? (
@@ -3583,11 +3590,9 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
                       <div style={{ color:C.scoreSubText, fontSize:12 }}>{inning}回 {isTop?"▲ 表":"▼ 裏"}</div>
                     )}
                   </div>
-                  <div style={{ textAlign:"right", opacity: oppBatting ? 1 : 0.4, transition:"opacity 0.2s", minWidth:80 }}>
-                    <div style={{ ...nameStyle(oppBatting), display:"block", textAlign:"right", borderBottom:"none", paddingBottom:0 }}>
-                      <span style={{ display:"inline-block", borderBottom: oppBatting ? `2px solid ${C.scoreSubText}` : "2px solid transparent", paddingBottom:1 }}>{oppTeamNameRaw}</span>
-                    </div>
-                    <div style={{ color:C.scoreText, fontSize: oppBatting ? 36 : 28, fontWeight:800, lineHeight:1 }}>{oppScore}</div>
+                  <div style={{ textAlign:"right", opacity: R.active ? 1 : 0.4, transition:"opacity 0.2s", minWidth:80 }}>
+                    <div style={nameStyle}>{R.name}{mark(R.active)}</div>
+                    <div style={{ color:C.scoreText, fontSize: R.active ? 36 : 28, fontWeight:800, lineHeight:1 }}>{R.score}</div>
                   </div>
                 </div>
               </div>
@@ -3883,14 +3888,21 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
               {/* 打席結果 */}
               <div style={{ padding:"12px 16px 8px" }}>
                 <div style={{ fontSize:9, fontWeight:700, color: C.textTer, letterSpacing:"0.1em", marginBottom:10 }}>打席結果</div>
-                <div
-                  onClick={() => handlePitch("IP")}
-                  style={{ padding:"16px 24px", borderRadius:50, background: C.brand, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", userSelect:"none", boxShadow:"0 4px 16px rgba(61,107,61,0.35)", transition:"transform 0.08s, box-shadow 0.08s" }}
-                  onPointerDown={e => { e.currentTarget.style.transform="scale(0.97)"; e.currentTarget.style.boxShadow="none"; }}
-                  onPointerUp={e => { e.currentTarget.style.transform=""; e.currentTarget.style.boxShadow="0 4px 16px rgba(61,107,61,0.35)"; }}
-                  onPointerLeave={e => { e.currentTarget.style.transform=""; e.currentTarget.style.boxShadow="0 4px 16px rgba(61,107,61,0.35)"; }}
-                >
-                  <span style={{ fontSize:15, fontWeight:800, color: C.brandText }}>打席結果を入力</span>
+                <div style={{ display:"flex", gap:10 }}>
+                  <div
+                    onClick={(stateHistory.length > 0 || isEditMode) ? handleUndo : undefined}
+                    style={{ flex:"0 0 30%", padding:"16px 8px", borderRadius:50, background: (stateHistory.length > 0 || isEditMode) ? "#FDF1E3" : C.bg, border:`1.5px solid ${(stateHistory.length > 0 || isEditMode) ? "#D98A2B" : "transparent"}`, display:"flex", alignItems:"center", justifyContent:"center", cursor: (stateHistory.length > 0 || isEditMode) ? "pointer" : "default", userSelect:"none", boxSizing:"border-box" }}>
+                    <span style={{ fontSize:14, fontWeight:800, color: (stateHistory.length > 0 || isEditMode) ? "#B8691A" : C.textTer, whiteSpace:"nowrap" }}>↩ {isEditMode ? "1打席戻る" : "1球戻る"}</span>
+                  </div>
+                  <div
+                    onClick={() => handlePitch("IP")}
+                    style={{ flex:1, padding:"16px 12px", borderRadius:50, background: C.brand, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", userSelect:"none", boxShadow:"0 4px 16px rgba(61,107,61,0.35)", transition:"transform 0.08s, box-shadow 0.08s" }}
+                    onPointerDown={e => { e.currentTarget.style.transform="scale(0.97)"; e.currentTarget.style.boxShadow="none"; }}
+                    onPointerUp={e => { e.currentTarget.style.transform=""; e.currentTarget.style.boxShadow="0 4px 16px rgba(61,107,61,0.35)"; }}
+                    onPointerLeave={e => { e.currentTarget.style.transform=""; e.currentTarget.style.boxShadow="0 4px 16px rgba(61,107,61,0.35)"; }}
+                  >
+                    <span style={{ fontSize:15, fontWeight:800, color: C.brandText }}>打席結果を入力</span>
+                  </div>
                 </div>
               </div>
 
@@ -3898,11 +3910,6 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
               <div style={{ padding:"6px 12px 12px", display:"flex", justifyContent:"center", alignItems:"center", gap:8 }}>
                 <div onClick={openSubModal} style={{ padding:"10px 14px", borderRadius:10, background:C.brandLight, border:`1px solid ${C.brand}`, cursor:"pointer", userSelect:"none" }}>
                   <span style={{ fontSize:12, color:C.brand, fontWeight:600 }}>選手交代</span>
-                </div>
-                <div
-                  onClick={(stateHistory.length > 0 || isEditMode) ? handleUndo : undefined}
-                  style={{ padding:"10px 14px", borderRadius:10, background: (stateHistory.length > 0 || isEditMode) ? C.card : C.bg, border:`1px solid ${(stateHistory.length > 0 || isEditMode) ? C.divider : "transparent"}`, cursor: (stateHistory.length > 0 || isEditMode) ? "pointer" : "default", userSelect:"none" }}>
-                  <span style={{ fontSize:12, color: (stateHistory.length > 0 || isEditMode) ? C.textSec : C.textTer, fontWeight:500 }}>{isEditMode ? "1打席戻す" : "1球取消"}</span>
                 </div>
                 <div style={{ flex:1 }}/>
                 <div
