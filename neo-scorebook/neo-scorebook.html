@@ -32,7 +32,7 @@
     const { useState, useRef, useEffect } = React;
 
     // /test/ 配下（試験用の配置）で開いたときは、本番と取り違えないよう「テスト版」と表示する
-    const APP_VERSION = "v2026.11.23-5" + (location.pathname.includes("/test/") ? "（テスト版）" : "");
+    const APP_VERSION = "v2026.11.23-6" + (location.pathname.includes("/test/") ? "（テスト版）" : "");
 
     // 開発環境判定：ローカル（localhost / LAN内IP / file://）で開いたときだけ true。
     // 本番（baseball.versus.jp）では false になり、開発用の仮データは使われない。
@@ -312,261 +312,297 @@ function MiniDiamond({ runners }) {
   );
 }
 
-function HistoryView({ gameLog, teamNameA, teamNameB, substitutions = [], gameStatus = null }) {
+function HistoryView({ gameLog, teamNameA, teamNameB, substitutions = [], gameStatus = null, lookupName = null }) {
+  // テキスト速報の形式：イニング見出し → 1行ずつの文章（マウンド・交代・走塁・打席結果・3者凡退/チェンジ）
   const [expanded, setExpanded] = useState({});
   const toggle = (key) => setExpanded(e => ({ ...e, [key]: !e[key] }));
 
-  const runnerStateText = (runners, outs) => {
-    const outStr = ["無死", "一死", "二死"][outs] ?? "─";
-    const occ = [];
-    if (runners?.third)  occ.push("三");
-    if (runners?.second) occ.push("二");
-    if (runners?.first)  occ.push("一");
-    if (occ.length === 0) return `${outStr}走者なし`;
-    if (occ.length === 3) return `${outStr}満塁`;
-    return `${outStr}${occ.join("")}塁`;
+  const POS_LONG = { "投":"投手", "捕":"捕手", "一":"一塁手", "二":"二塁手", "三":"三塁手", "遊":"遊撃手", "左":"左翼手", "中":"中堅手", "右":"右翼手", "DH":"DH" };
+  const DIRS = ["投", "捕", "一", "二", "三", "遊", "左", "中", "右"];
+  const BLUE = "#1a4fb0", GREEN = "#2e7d1e", RED = "#C0392B";
+
+  // 背番号 → 名前（isA = 先攻チーム側）
+  const nameOf = (isA, num) => {
+    const n = lookupName ? lookupName(isA, num) : null;
+    if (n) return n;
+    for (const h of gameLog) {
+      if ((h.topBottom === "表") !== isA) continue;
+      const ab = h.atBats.find(a => a.number === num && a.name);
+      if (ab) return ab.name;
+    }
+    return `#${num}`;
   };
 
-  const resultBadge = (result) => {
-    if (!result) return null;
-    if (result === "送りバント") return { bg:"#F3E5F5", color:"#6A1B9A" };
-    if (isOutResult(result)) return { bg:"#FDECEA", color:"#C0392B" };
-    if (result === "セーフティバント" || ["ヒット","二塁打","三塁打","本塁打","1塁打","2塁打","3塁打","ホームラン"].some(h => result.includes(h)))
-      return { bg:"#E8F5E9", color:"#27AE60" };
-    if (result.includes("フォアボール") || result.includes("デッドボール"))
-      return { bg:"#E3F2FD", color:"#1565C0" };
-    if (result.includes("エラー") || result.includes("FC") || result.includes("野選"))
-      return { bg:"#FFF3E0", color:"#E65100" };
-    if (result.includes("犠")) return { bg:"#F3E5F5", color:"#6A1B9A" };
-    return { bg:C.brandLight, color:C.brand };
+  // 投手の投球数：defIsA=その投手が守備側の先攻チームか。hiEnd 半回の aiEnd 打席の手前まで（aiEnd=null なら半回の終わりまで）
+  const cumPitches = (num, defIsA, hiEnd, aiEnd) => {
+    let t = 0;
+    gameLog.forEach((h, hi) => {
+      if ((h.topBottom === "裏") !== defIsA) return;
+      if (hi > hiEnd) return;
+      h.atBats.forEach((ab, ai) => {
+        if (hi === hiEnd && aiEnd != null && ai >= aiEnd) return;
+        if (ab.pitcherNumber === num) t += ab.pitches?.length || 0;
+      });
+    });
+    return t;
   };
 
-  const eventBadgeColor = (ev) => {
-    if (!ev) return { bg:C.brandLight, color:C.brand };
-    if (ev.includes("アウト") || ev.includes("三振") || ev.includes("ゴロ") || ev.includes("フライ") || ev.includes("ライナー"))
-      return { bg:"#FDECEA", color:"#C0392B" };
-    if (["ヒット","二塁打","三塁打","本塁打","ホームラン","得点"].some(h => ev.includes(h)))
-      return { bg:"#E8F5E9", color:"#27AE60" };
-    if (ev.includes("フォアボール") || ev.includes("デッドボール"))
-      return { bg:"#E3F2FD", color:"#1565C0" };
-    return { bg:"#F0F0F0", color:"#666" };
+  const countLabel = (pitches) => {
+    const before = (pitches || []).slice(0, -1);
+    if (before.length === 0) return "初球から";
+    const { balls, strikes } = replayBSO(before);
+    if (balls === 3 && strikes === 2) return "フルカウントから";
+    if (balls > 0 && strikes > 0) return `${balls}B${strikes}Sから`;
+    if (balls > 0) return `${balls}Bから`;
+    if (strikes > 0) return `${strikes}Sから`;
+    return "初球から";
   };
 
-  const subLine = (s) => {
-    switch(s.type) {
-      case "投手交代":       return `投手交代: ${s.outName} → ${s.inName}`;
-      case "代打":           return `${s.outName} →代打: ${s.inName}`;
+  const RESULT_WORD = {
+    "ヒット":"安打", "二塁打":"二塁打", "三塁打":"三塁打", "本塁打":"本塁打", "エラー":"失策", "FC（野選）":"野選",
+    "セーフティバント":"セーフティバント", "ゴロ":"ゴロ", "フライ":"飛", "ライナー":"直", "送りバント":"送りバント",
+    "バント":"バント", "犠飛":"犠飛", "ファールフライ":"邪飛", "ファールライナー":"邪直", "併殺打":"ゴロ併殺打",
+  };
+  const VERB_TSUMO = ["ゴロ", "併殺打", "エラー", "FC（野選）", "バント", "送りバント", "セーフティバント"];
+  const VERB_UCHIAGE = ["ファールフライ", "ファールライナー"];
+
+  // 打席結果を「初球から打って中飛」のような文にする
+  const atBatPhrase = (ab) => {
+    const r = ab.result;
+    if (!r) return ab.pitches?.length ? "（打席の途中）" : "";
+    const pitches = ab.pitches || [];
+    const prefix = pitches.length > 0 && r !== "故意四球" ? countLabel(pitches) : "";
+    if (r === "三振（K）")      return `${prefix}見逃し三振`;
+    if (r === "三振（KS）")     return `${prefix}空振り三振`;
+    if (r === "フォアボール")   return `${prefix}見極めて四球`;
+    if (r === "デッドボール")   return `${prefix}死球`;
+    if (r === "故意四球")       return "故意四球";
+    if (r === "振り逃げ")       return `${prefix}空振り三振（振り逃げ）`;
+    const d = r[0], rest = r.slice(1);
+    if (DIRS.includes(d) && RESULT_WORD[rest] !== undefined) {
+      const verb = VERB_TSUMO.includes(rest) ? "打つも" : VERB_UCHIAGE.includes(rest) ? "打ち上げて" : "打って";
+      return `${prefix}${verb}${d}${RESULT_WORD[rest]}`;
+    }
+    return `${prefix}${r}`;
+  };
+
+  const stateText = (outs, runners) => {
+    const o = outs <= 0 ? "無死" : `${outs}死`;
+    const b = [];
+    if (runners?.first)  b.push("一");
+    if (runners?.second) b.push("二");
+    if (runners?.third)  b.push("三");
+    if (b.length === 0) return o;
+    if (b.length === 3) return `${o}満塁`;
+    return `${o}${b.join("、")}塁`;
+  };
+
+  const baseWord = { "1":"一塁", "2":"二塁", "3":"三塁" };
+  const EV_WORD = {
+    "盗塁成功":"盗塁成功", "盗塁死":"盗塁死", "牽制セーフ":"牽制セーフ", "牽制アウト":"牽制死",
+    "WP進塁":"暴投で進塁", "PB進塁":"捕逸で進塁", "ボールデッド進塁":"ボールデッドで進塁",
+    "その他進塁":"進塁", "その他アウト":"アウト", "直前のプレーの続きで進塁":"進塁（直前のプレーの続き）",
+  };
+  // 走塁イベントの文（例: 「3球目、二塁走者が盗塁成功」）
+  const evSentence = (text, pitchIdx) => {
+    const m = (text || "").match(/^([123])塁ランナー\s+(?:(.+?)\s+)?(盗塁成功|盗塁死|牽制セーフ|牽制アウト|WP進塁|PB進塁|ボールデッド進塁|その他進塁|その他アウト|直前のプレーの続きで進塁)(?:（(.*)）)?$/);
+    if (!m) return text;
+    const act = m[3];
+    const prefix = act.startsWith("牽制") ? "投手牽制、" : (pitchIdx > 0 ? `${pitchIdx}球目、` : "");
+    return `${prefix}${baseWord[m[1]]}走者が${EV_WORD[act]}${m[4] ? `（${m[4]}）` : ""}`;
+  };
+
+  // 交代の行（JSX）
+  const subRow = (s, defIsA, hi, ai) => {
+    const nm = (t) => <span style={{ color: GREEN }}>{t}</span>;
+    switch (s.type) {
+      case "投手交代": {
+        const n = cumPitches(s.outNumber, defIsA, hi, ai);
+        return <>【投手交代】{s.outName}{n > 0 ? `(${n}球)` : ""} → {nm(s.inName)}　（投手）</>;
+      }
+      case "代打":
+        return <>【代打】{s.outName} → <span style={{ color: BLUE }}>{s.inName}</span></>;
       case "代走": {
         const bl = { first:"一塁", second:"二塁", third:"三塁" }[s.base] ?? "";
-        return `${bl}走者 ${s.outName} →代走: ${s.inName}`;
+        return <>【代走】{bl}走者 {s.outName} → <span style={{ color: BLUE }}>{s.inName}</span></>;
       }
-      case "ポジションチェンジ": return `守備変更: ${s.outName}・${s.inName} ポジションチェンジ`;
-      case "守備位置変更":   return `守備変更: ${s.outName} ${s.outPos ?? ""}→${s.newPos}`;
-      default: return `守備交代: ${s.outName} → ${s.inName}`;
+      case "ポジションチェンジ":
+        return <>【守備変更】{s.outName}（{POS_LONG[s.outPos] || s.outPos}→{POS_LONG[s.inPos] || s.inPos}）・{s.inName}（{POS_LONG[s.inPos] || s.inPos}→{POS_LONG[s.outPos] || s.outPos}）</>;
+      case "守備位置変更":
+        return <>【守備変更】{s.outName}　{POS_LONG[s.outPos] || s.outPos ? `${POS_LONG[s.outPos] || s.outPos} → ` : ""}{POS_LONG[s.newPos] || s.newPos}</>;
+      default:
+        return <>【守備交代】{s.outName} → {nm(s.inName)}　（{POS_LONG[s.newPos] || s.newPos || ""}）</>;
     }
+  };
+
+  // 1打席の投球内訳（タップで展開）
+  const pitchDetail = (ab) => {
+    const labels = { B:"ボール", 見逃:"見逃し", 空振:"空振り", F:"ファウル", IP:"インプレー", DB:"死球", 振:"振り逃げ", IBB:"故意四球" };
+    const byPitch = {};
+    (ab.pitchEvents || []).forEach(pe => {
+      const i = typeof pe.pitchIdx === "number" ? pe.pitchIdx - 1 : -1;
+      if (i >= 0) (byPitch[i] = byPitch[i] || []).push(pe.text);
+    });
+    if (!ab.pitches || ab.pitches.length === 0) {
+      return <div style={{ fontSize:12, color: C.textTer }}>投球の記録なし</div>;
+    }
+    return ab.pitches.map((p, pi) => {
+      const bc = CHIP[p] || { bg:"#F0F0F0", color:"#666" };
+      const evs = byPitch[pi] || [];
+      return (
+        <div key={pi} style={{ display:"flex", alignItems:"flex-start", gap:8, marginTop:5 }}>
+          <div style={{ width:20, height:20, borderRadius:"50%", background:bc.bg, color:bc.color, fontSize:10, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{pi + 1}</div>
+          <span style={{ fontSize:12, color: C.textPri, lineHeight:"20px" }}>{labels[p] || p}{evs.length > 0 ? `（${evs.join("・")}）` : ""}</span>
+        </div>
+      );
+    });
   };
 
   if (gameLog.length === 0) {
     return <div style={{ padding:"40px 14px", textAlign:"center", color: C.textTer, fontSize:13 }}>まだ記録がありません</div>;
   }
 
+  const numBox = (n) => (
+    <div style={{ background:"#111", color:"#fff", fontSize:13, fontWeight:700, minWidth:22, height:22, borderRadius:3, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1 }}>{n}</div>
+  );
+  const rowStyle = (bg) => ({ display:"flex", gap:10, alignItems:"flex-start", padding:"10px 14px", borderBottom:`1px solid ${C.divider}`, background: bg || C.card });
+  const textStyle = { flex:1, minWidth:0, fontSize:14, lineHeight:"22px", color: C.textPri, wordBreak:"break-all" };
+
   return (
     <div style={{ overflowY:"auto", maxHeight:480, background: C.bg, paddingBottom:24 }}>
       {gameLog.map((half, hi) => {
         const isAttackA = half.topBottom === "表";
+        const defIsA = !isAttackA;                    // 守備側が先攻チームか
         const teamName = isAttackA ? (teamNameA || "表") : (teamNameB || "裏");
-        const halfSubs = substitutions.filter(s =>
-          s.inning === half.inning && s.isTop === (half.topBottom === "表")
-        );
+        const halfSubs = substitutions.filter(s => s.inning === half.inning && s.isTop === isAttackA);
 
-        // 結果・投球・イベントが全くない空打席を除外
         const isEmptyAb = (ab) => !ab.result && (!ab.pitches || ab.pitches.length === 0) && (!ab.events || ab.events.length === 0);
         const visibleAtBats = half.atBats.filter(ab => !isEmptyAb(ab));
-
-        // 有効な打席も交代記録もない半回は丸ごとスキップ
         if (visibleAtBats.length === 0 && halfSubs.length === 0) return null;
 
         const inningRuns = half.atBats.reduce((sum, ab) => sum + (ab.runsScored || 0), 0);
 
-        // 各打席の開始時アウト数を計算（打者アウト + 走者アウト）
+        // 各打席の開始時アウト数（打者アウト＋走者アウト）
         let outsAcc = 0;
-        const outsAtStart = half.atBats.map(ab => {
-          const o = outsAcc;
-          outsAcc += countAtBatOuts(ab);
-          return o;
+        const outsAtStart = half.atBats.map(ab => { const o = outsAcc; outsAcc += countAtBatOuts(ab); return o; });
+        const outsEnd = outsAcc;
+
+        // 最後に結果の入った打席（3アウト目を取った打席）
+        let lastResultIdx = -1;
+        half.atBats.forEach((ab, ai) => { if (ab.result) lastResultIdx = ai; });
+        const halfEnded = outsEnd >= 3 && lastResultIdx >= 0;
+        const isLastHalf = hi === gameLog.length - 1;
+        const gameOver = isLastHalf && gameStatus && gameStatus !== "in_progress";
+
+        // この半回の最後の投手と投球数
+        const pAbs = half.atBats.filter(ab => ab.pitcherNumber != null);
+        const lastPitcher = pAbs.length ? pAbs[pAbs.length - 1].pitcherNumber : null;
+        const pitcherText = (() => {
+          if (lastPitcher == null) return "";
+          const inHalf = half.atBats.reduce((s, ab) => s + (ab.pitcherNumber === lastPitcher ? (ab.pitches?.length || 0) : 0), 0);
+          const cum = cumPitches(lastPitcher, defIsA, hi, null);
+          return `${nameOf(defIsA, lastPitcher)} (${inHalf}球/${cum}球)`;
+        })();
+
+        // 3者凡退：3人で3アウト、全員が打者アウトで走者の動きなし
+        const perfect = halfEnded && visibleAtBats.length === 3 &&
+          visibleAtBats.every(ab => ab.result && isOutResult(ab.result) && atBatRunnerOuts(ab) === 0 && (ab.events || []).length === 0);
+
+        // 行を時系列に並べる
+        const items = [];
+        const firstSub = halfSubs.find(s => (s.atBatIdx ?? 0) <= 0);
+        const pitcherChangedAtStart = firstSub && (firstSub.type === "投手交代" || (firstSub.type === "守備位置変更" && firstSub.newPos === "投"));
+        if (!pitcherChangedAtStart && pAbs.length > 0) {
+          items.push({ kind:"mound", num: pAbs[0].pitcherNumber });
+        }
+        half.atBats.forEach((ab, ai) => {
+          halfSubs.filter(s => s.atBatIdx === ai).forEach(s => items.push({ kind:"sub", s, ai }));
+          if (isEmptyAb(ab)) return;
+          (ab.pitchEvents || []).forEach(pe => items.push({ kind:"ev", text: pe.text, pitchIdx: pe.pitchIdx || 0 }));
+          if (!(ab.pitchEvents && ab.pitchEvents.length) && ab.events && ab.events.length) {
+            ab.events.forEach(t => items.push({ kind:"ev", text: t, pitchIdx: 0 }));   // 旧形式のログ
+          }
+          if (ab.result || (ab.pitches && ab.pitches.length)) items.push({ kind:"ab", ab, ai });
         });
+        halfSubs.filter(s => s.atBatIdx == null).forEach(s => items.push({ kind:"sub", s, ai:null }));
 
         return (
           <div key={hi}>
-            {/* イニングヘッダー */}
-            <div style={{ padding:"10px 16px 8px", background: C.scoreBg, display:"flex", justifyContent:"space-between", alignItems:"center", borderBottom:`2px solid ${C.divider}` }}>
-              <span style={{ fontSize:13, fontWeight:700, color: C.scoreText }}>
+            {/* イニング見出し */}
+            <div style={{ padding:"9px 14px", background: C.scoreBg, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <span style={{ fontSize:14, fontWeight:700, color: C.scoreText }}>
                 {half.inning}回{half.topBottom}　{teamName}の攻撃
               </span>
-              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                {hi === gameLog.length - 1 && gameStatus && gameStatus !== "in_progress" && (
-                  <span style={{ fontSize:11, fontWeight:700, padding:"2px 10px", borderRadius:12,
-                    background: gameStatus === "completed" ? C.brand : "#C8A000",
-                    color: C.brandText }}>
-                    {gameStatus === "completed" ? "試合終了" : "コールド"}
-                  </span>
-                )}
-                {inningRuns > 0
-                  ? <span style={{ fontSize:12, fontWeight:700, color:"#D4A017" }}>{inningRuns}点</span>
-                  : <span style={{ fontSize:11, color: C.scoreSubText }}>無得点</span>
-                }
-              </div>
+              <span style={{ fontSize:12, fontWeight:700, color: inningRuns > 0 ? "#F2C94C" : C.scoreSubText }}>
+                {inningRuns > 0 ? `${inningRuns}点` : "無得点"}
+              </span>
             </div>
 
-            {/* 打席一覧 + 交代記録をインターリーブ */}
-            {half.atBats.map((ab, ai) => {
-              // この打席後に発生した交代（先に取得）
-              const subsAfter = halfSubs.filter(s => s.atBatIdx === ai);
-
-              // 空打席は交代記録だけ表示（打席行自体はスキップ）
-              if (isEmptyAb(ab)) {
-                if (subsAfter.length === 0) return null;
+            {items.map((it, k) => {
+              const n = k + 1;
+              if (it.kind === "mound") {
                 return (
-                  <div key={ai}>
-                    {subsAfter.map((s, si) => (
-                      <div key={`sub-${ai}-${si}`} style={{ padding:"7px 16px 7px 44px", borderBottom:`1px solid ${C.divider}`, background:"#FAFAF3", display:"flex", alignItems:"center", gap:6 }}>
-                        <span style={{ fontSize:10, fontWeight:700, color:"#7A6A10", background:"#F0E8B0", padding:"1px 7px", borderRadius:10, flexShrink:0 }}>{s.type}</span>
-                        <span style={{ fontSize:12, color:"#5A5000" }}>{subLine(s)}</span>
-                      </div>
-                    ))}
+                  <div key={k} style={rowStyle()}>{numBox(n)}
+                    <div style={textStyle}>マウンド <span style={{ color: GREEN }}>{nameOf(defIsA, it.num)}</span></div>
                   </div>
                 );
               }
-
+              if (it.kind === "sub") {
+                return (
+                  <div key={k} style={rowStyle("#FAFAF3")}>{numBox(n)}
+                    <div style={textStyle}>{subRow(it.s, defIsA, hi, it.ai ?? half.atBats.length)}</div>
+                  </div>
+                );
+              }
+              if (it.kind === "ev") {
+                return (
+                  <div key={k} style={rowStyle()}>{numBox(n)}
+                    <div style={textStyle}>{evSentence(it.text, it.pitchIdx)}</div>
+                  </div>
+                );
+              }
+              // 打席
+              const { ab, ai } = it;
               const key = `${hi}-${ai}`;
               const isOpen = expanded[key];
-              const outs = outsAtStart[ai];
-              const stateText = runnerStateText(ab.runnersAtStart, outs);
+              const outsAfter = outsAtStart[ai] + countAtBatOuts(ab);
+              const isLastOfHalf = halfEnded && ai === lastResultIdx;
               const scored = (ab.runsScored || 0) > 0;
-              const badge = resultBadge(ab.result);
-              const isInterrupted = !ab.result && (hi < gameLog.length - 1) && ai === half.atBats.length - 1;
-
+              let tail = "";
+              if (ab.result) {
+                if (isLastOfHalf) {
+                  const lob = [];
+                  if (ab.runnersAfter?.first)  lob.push("一");
+                  if (ab.runnersAfter?.second) lob.push("二");
+                  if (ab.runnersAfter?.third)  lob.push("三");
+                  const lobText = lob.length === 3 ? "満塁残塁" : lob.length > 0 ? `${lob.join("、")}塁残塁` : "";
+                  const endWord = (gameOver && isLastHalf) ? "試合終了" : "チェンジ";
+                  tail = perfect ? `3者凡退、${endWord}` : `${endWord}${lobText ? `、${lobText}` : ""}`;
+                } else {
+                  tail = stateText(outsAfter, ab.runnersAfter);
+                }
+              }
               return (
-                <div key={ai}>
-                  {/* 打席行 */}
-                  <div style={{ borderBottom:`1px solid ${C.divider}`, background: scored ? "#F2FAF2" : C.card }}>
-                    <div onClick={() => toggle(key)} style={{ padding:"10px 16px", display:"flex", alignItems:"center", gap:6, cursor:"pointer", userSelect:"none" }}>
-                      <span style={{ fontSize:11, color: C.textTer, minWidth:28, flexShrink:0 }}>{ab.order}番</span>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <span style={{ fontSize:13, fontWeight:600, color: C.textPri }}>{ab.name}</span>
-                        <span style={{ fontSize:11, color: C.textTer, marginLeft:6 }}>{stateText}</span>
-                      </div>
-                      {badge && (
-                        <span style={{ fontSize:11, fontWeight:700, padding:"2px 9px", borderRadius:12, background:badge.bg, color:badge.color, flexShrink:0, maxWidth:120, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                          {ab.result}
-                        </span>
-                      )}
-                      {isInterrupted && (
-                        <span style={{ fontSize:11, color:C.textTer, flexShrink:0 }}>ー</span>
-                      )}
-                      {scored && (
-                        <span style={{ fontSize:11, fontWeight:700, color:"#27AE60", flexShrink:0 }}>+{ab.runsScored}点</span>
-                      )}
-                      <span style={{ fontSize:10, color:C.textTer, flexShrink:0, display:"inline-block", transform:isOpen?"rotate(180deg)":"rotate(0deg)", transition:"transform 0.15s" }}>▼</span>
+                <div key={k} style={{ borderBottom:`1px solid ${C.divider}`, background: scored ? "#F2FAF2" : C.card }}>
+                  <div onClick={() => toggle(key)} style={{ display:"flex", gap:10, alignItems:"flex-start", padding:"10px 14px", cursor:"pointer", userSelect:"none" }}>
+                    {numBox(n)}
+                    <div style={textStyle}>
+                      <span style={{ color: BLUE }}>{ab.order}番{ab.name}</span>{" "}
+                      {atBatPhrase(ab)}
+                      {tail && <span>　{tail}</span>}
+                      {scored && <span style={{ color: GREEN, fontWeight:700 }}>　{ab.runsScored}点</span>}
+                      {isLastOfHalf && pitcherText && <span>　<span style={{ color: GREEN }}>{pitcherText}</span></span>}
                     </div>
-
-                    {/* 展開時：ピッチ縦表示 */}
-                    {isOpen && (
-                      <div style={{ padding:"4px 16px 12px 50px", background: C.bg, borderTop:`1px solid ${C.divider}` }}>
-                        {ab.events.length === 0 && ab.pitches.length === 0 && (
-                          <span style={{ fontSize:11, color:C.textTer }}>記録なし</span>
-                        )}
-                        {ab.pitches.length > 0 && (() => {
-                          const pitchLabels = { B:"ボール", 見逃:"見逃し", 空振:"空振り", F:"ファウル", IP:"インプレー", DB:"死球", 振:"振り逃げ", IBB:"故意四球" };
-                          const eventsByPitch = {};
-                          const orphanEvents = [];
-                          (ab.pitchEvents || []).forEach(pe => {
-                            const idx = typeof pe.pitchIdx === "number" ? pe.pitchIdx - 1 : null;
-                            if (idx !== null && idx >= 0 && idx < ab.pitches.length) {
-                              if (!eventsByPitch[idx]) eventsByPitch[idx] = [];
-                              eventsByPitch[idx].push(pe.text);
-                            } else {
-                              orphanEvents.push(pe.text);
-                            }
-                          });
-                          const hasNewEvents = ab.pitchEvents && ab.pitchEvents.length > 0;
-                          const legacyEvents = hasNewEvents ? [] : ab.events;
-                          return (
-                            <>
-                              {ab.pitches.map((p, pi) => {
-                                const evs = eventsByPitch[pi] || [];
-                                const label = pitchLabels[p] || p;
-                                const bc = CHIP[p] || { bg:"#F0F0F0", color:"#666" };
-                                return (
-                                  <div key={pi} style={{ display:"flex", alignItems:"flex-start", gap:8, marginTop:6 }}>
-                                    <div style={{ width:20, height:20, borderRadius:"50%", background:bc.bg, color:bc.color, fontSize:10, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1 }}>
-                                      {pi + 1}
-                                    </div>
-                                    <span style={{ fontSize:12, color:C.textPri, lineHeight:"20px" }}>
-                                      {label}{evs.length > 0 ? `（${evs.join("・")}）` : ""}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                              {orphanEvents.map((ev, ei) => (
-                                <div key={`orp-${ei}`} style={{ display:"flex", alignItems:"flex-start", gap:8, marginTop:6 }}>
-                                  <span style={{ fontSize:10, color:C.textTer, lineHeight:"20px", marginTop:1 }}>✦</span>
-                                  <span style={{ fontSize:12, color:C.textPri, lineHeight:"20px" }}>{ev}</span>
-                                </div>
-                              ))}
-                              {legacyEvents.map((ev, ei) => {
-                                const bc = eventBadgeColor(ev);
-                                return (
-                                  <div key={`leg-${ei}`} style={{ display:"flex", alignItems:"flex-start", gap:8, marginTop:6 }}>
-                                    <div style={{ width:20, height:20, borderRadius:"50%", background:bc.bg, color:bc.color, fontSize:10, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1 }}>
-                                      {ei + 1}
-                                    </div>
-                                    <span style={{ fontSize:12, color:C.textPri, lineHeight:"20px" }}>{ev}</span>
-                                  </div>
-                                );
-                              })}
-                            </>
-                          );
-                        })()}
-                        {ab.pitches.length === 0 && ab.events.map((ev, ei) => {
-                          const bc = eventBadgeColor(ev);
-                          return (
-                            <div key={`ev-${ei}`} style={{ display:"flex", alignItems:"flex-start", gap:8, marginTop:6 }}>
-                              <div style={{ width:20, height:20, borderRadius:"50%", background:bc.bg, color:bc.color, fontSize:10, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1 }}>
-                                {ei + 1}
-                              </div>
-                              <span style={{ fontSize:12, color:C.textPri, lineHeight:"20px" }}>{ev}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
                   </div>
-
-                  {/* この打席後の交代記録 */}
-                  {subsAfter.map((s, si) => (
-                    <div key={`sub-${ai}-${si}`} style={{ padding:"7px 16px 7px 44px", borderBottom:`1px solid ${C.divider}`, background:"#FAFAF3", display:"flex", alignItems:"center", gap:6 }}>
-                      <span style={{ fontSize:10, fontWeight:700, color:"#7A6A10", background:"#F0E8B0", padding:"1px 7px", borderRadius:10, flexShrink:0 }}>
-                        {s.type}
-                      </span>
-                      <span style={{ fontSize:12, color:"#5A5000" }}>{subLine(s)}</span>
+                  {isOpen && (
+                    <div style={{ padding:"2px 14px 12px 46px", background: C.bg, borderTop:`1px solid ${C.divider}` }}>
+                      {pitchDetail(ab)}
                     </div>
-                  ))}
+                  )}
                 </div>
               );
             })}
-
-            {/* atBatIdx が未設定の旧データは末尾に表示 */}
-            {halfSubs.filter(s => s.atBatIdx == null).map((s, si) => (
-              <div key={`sub-end-${si}`} style={{ padding:"7px 16px 7px 44px", borderBottom:`1px solid ${C.divider}`, background:"#FAFAF3", display:"flex", alignItems:"center", gap:6 }}>
-                <span style={{ fontSize:10, fontWeight:700, color:"#7A6A10", background:"#F0E8B0", padding:"1px 7px", borderRadius:10, flexShrink:0 }}>
-                  {s.type}
-                </span>
-                <span style={{ fontSize:12, color:"#5A5000" }}>{subLine(s)}</span>
-              </div>
-            ))}
-
-            <div style={{ height:10, background: C.bg }}/>
+            <div style={{ height:8, background: C.bg }}/>
           </div>
         );
       })}
@@ -1642,37 +1678,40 @@ function OpponentTab({ onLineupChange, onBenchChange, onTeamNameChange, useDevDe
   );
   const [bench, setBench] = useState([]);
   const [dhPitcher, setDhPitcher] = useState({ number: "", name: "" }); // DH制度：打順に入らない先発投手
-  const [pastTeams, setPastTeams] = useState([
-    { name: "テストチーム", date: "2026-06-01", lineup: [
-      { order:1, number:"1", name:"1番選手", pos:"中" },
-      { order:2, number:"2", name:"2番選手", pos:"遊" },
-      { order:3, number:"3", name:"3番選手", pos:"右" },
-      { order:4, number:"4", name:"4番選手", pos:"一" },
-      { order:5, number:"5", name:"5番選手", pos:"三" },
-      { order:6, number:"6", name:"6番選手", pos:"左" },
-      { order:7, number:"7", name:"7番選手", pos:"捕" },
-      { order:8, number:"8", name:"8番選手", pos:"二" },
-      { order:9, number:"9", name:"9番選手", pos:"投" },
-    ]},
-  ]);
-  const [pastOpen, setPastOpen] = useState(false);
+  const [pastTeams, setPastTeams] = useState([]);
+  const [pastOpen, setPastOpen] = useState(true);
 
+  // 過去の試合から「対戦したチーム」の一覧を作る。
+  // ・チーム名は試合の opponent 列から（試合の詳細データ game_state が無い古い試合も含める）
+  // ・オーダーと控えは、その相手の最新の記録から「スタメン」（試合開始時のオーダー）を使う
+  // ・「自チーム以外を入力」で記録した試合は、入力した2チームの両方を一覧に入れる
   useEffect(() => {
     supabase
       .from("nsb_games")
       .select("opponent, game_state, game_date")
-      .not("game_state", "is", null)
       .order("created_at", { ascending: false })
-      .then(({ data }) => {
-        if (!data) return;
-        const seen = new Set();
-        const teams = [];
+      .then(({ data, error }) => {
+        if (error || !data) return;
+        const byName = new Map();
+        const add = (name, lineup, bench, date) => {
+          name = (name || "").trim();
+          if (!name) return;
+          let t = byName.get(name);
+          if (!t) { t = { name, date, games: 0, lineup: [], bench: [] }; byName.set(name, t); }
+          t.games += 1;
+          if (t.lineup.length === 0 && lineup && lineup.length > 0) { t.lineup = lineup; t.bench = bench || []; }
+        };
         for (const g of data) {
-          if (!g.game_state?.oppLineup?.length || seen.has(g.opponent)) continue;
-          seen.add(g.opponent);
-          teams.push({ name: g.opponent, lineup: g.game_state.oppLineup, bench: g.game_state.oppBench || [], date: g.game_date });
+          const gs = g.game_state || {};
+          const startA = gs.startingLineupA?.length ? gs.startingLineupA : (gs.lineup || []);   // 先攻チーム
+          const startB = gs.startingLineupB?.length ? gs.startingLineupB : (gs.oppLineup || []); // 後攻チーム
+          const ownFirst = (gs.batting || "先攻") === "先攻";
+          const ownLineup = ownFirst ? startA : startB;
+          const oppLineup = ownFirst ? startB : startA;
+          add(g.opponent, oppLineup, gs.oppBench, g.game_date);
+          if (gs.myFree) add(gs.myTeamLabel, ownLineup, gs.myBench, g.game_date);
         }
-        setPastTeams(teams);
+        setPastTeams([...byName.values()]);
       });
   }, []);
 
@@ -1720,6 +1759,11 @@ function OpponentTab({ onLineupChange, onBenchChange, onTeamNameChange, useDevDe
   };
 
   const selectPast = (team) => {
+    if (!team.lineup || team.lineup.length === 0) {   // チーム名だけ残っている古い試合：オーダーは入力し直す
+      setTeamName(team.name);
+      goToOrder(team.name);
+      return;
+    }
     const pitcherRow = team.lineup.find(r => r.pos === "投" && r.order == null);
     const preLineup = team.lineup.filter(r => !(r.pos === "投" && r.order == null)).map(r => ({
       order: r.order, number: r.number ? String(r.number) : "", name: r.name || "", pos: r.pos || "-",
@@ -1797,7 +1841,7 @@ function OpponentTab({ onLineupChange, onBenchChange, onTeamNameChange, useDevDe
                 >
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 15, fontWeight: 700, color: C.textPri }}>{team.name}</div>
-                    <div style={{ fontSize: 11, color: C.textTer, marginTop: 2 }}>{team.date} の記録</div>
+                    <div style={{ fontSize: 11, color: C.textTer, marginTop: 2 }}>{team.date}　{team.games}試合{team.lineup.length > 0 ? "・前回のオーダーが入ります" : "・オーダーは入力し直し"}</div>
                   </div>
                   <span style={{ fontSize: 11, color: C.brand, fontWeight: 600 }}>使う →</span>
                 </div>
@@ -2705,6 +2749,15 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
   const activeBattersB = currentLineupB ?? baseLineupB;
   const benchA = (batting === "後攻" ? gameOrder?.oppBench : gameOrder?.myBench) || [];
   const benchB = (batting === "後攻" ? gameOrder?.myBench  : gameOrder?.oppBench) || [];
+  // 経過ビュー用：背番号から選手名を引く（isA = 先攻チーム側）
+  const lookupName = (isA, num) => {
+    const lists = isA ? [startingLineupA.current, activeBattersA, benchA] : [startingLineupB.current, activeBattersB, benchB];
+    for (const l of lists) {
+      const f = (l || []).find(p => p.number === num && p.name);
+      if (f) return f.name;
+    }
+    return null;
+  };
 
   // ── gameLog：経過ビューと共有するデータ ──
   const pitcherB = activeBattersB.find(b => b.pos === "投") ?? activeBattersB[8] ?? PITCHER_B;
@@ -3754,7 +3807,7 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
           </div>
 
           {/* 経過ビュー */}
-          {activeView === "history" && <HistoryView gameLog={gameLog} substitutions={substitutions} teamNameA={activeTeamA} teamNameB={oppTeamName} gameStatus={gameStatus}/>}
+          {activeView === "history" && <HistoryView gameLog={gameLog} substitutions={substitutions} teamNameA={activeTeamA} teamNameB={oppTeamName} gameStatus={gameStatus} lookupName={lookupName}/>}
 
           {/* 成績ビュー */}
           {activeView === "stats" && (
