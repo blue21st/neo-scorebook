@@ -31,7 +31,8 @@
   <script type="text/babel">
     const { useState, useRef, useEffect } = React;
 
-    const APP_VERSION = "v2026.11.14-1";
+    // /test/ 配下（試験用の配置）で開いたときは、本番と取り違えないよう「テスト版」と表示する
+    const APP_VERSION = "v2026.11.14-2" + (location.pathname.includes("/test/") ? "（テスト版）" : "");
 
     // 開発環境判定：ローカル（localhost / LAN内IP / file://）で開いたときだけ true。
     // 本番（baseball.versus.jp）では false になり、開発用の仮データは使われない。
@@ -1614,11 +1615,12 @@ const DEV_DEFAULT_OPP_LINEUP = [
   { order: 9, number: "18", name: "青柳 晃洋",   pos: "投" },
 ];
 
-function OpponentTab({ onLineupChange, onBenchChange, onTeamNameChange }) {
-  const [step, setStep] = useState(IS_DEV ? "order" : "select");
-  const [teamName, setTeamName] = useState(IS_DEV ? DEV_DEFAULT_OPP_TEAM : "");
+function OpponentTab({ onLineupChange, onBenchChange, onTeamNameChange, useDevDefaults = true, teamLabel = "相手チーム" }) {
+  const useDev = IS_DEV && useDevDefaults; // 「自チーム以外を入力」側では仮オーダーを入れない
+  const [step, setStep] = useState(useDev ? "order" : "select");
+  const [teamName, setTeamName] = useState(useDev ? DEV_DEFAULT_OPP_TEAM : "");
   const [lineup, setLineup] = useState(
-    IS_DEV
+    useDev
       ? DEV_DEFAULT_OPP_LINEUP.map(r => ({ ...r }))
       : Array.from({ length: LINEUP_SIZE }, (_, i) => ({ order: i + 1, number: "", name: "", pos: "-" }))
   );
@@ -1673,7 +1675,7 @@ function OpponentTab({ onLineupChange, onBenchChange, onTeamNameChange }) {
 
   // 開発時のみ：デフォルト表示中のオーダーを親state（oppLineup/oppTeamName）にも反映しておく
   useEffect(() => {
-    if (!IS_DEV) return;
+    if (!useDev) return;
     if (onTeamNameChange) onTeamNameChange(teamName);
     notify(lineup);
   }, []);
@@ -1746,7 +1748,7 @@ function OpponentTab({ onLineupChange, onBenchChange, onTeamNameChange }) {
     <div>
       <div style={{ background: C.card, borderRadius: 14, padding: "14px 16px", boxShadow: C.cardShadow, display: "flex", gap: 8, alignItems: "center", marginBottom: pastTeams.length > 0 ? 12 : 0 }}>
         <input
-          placeholder="相手チーム名を入力"
+          placeholder={`${teamLabel}名を入力`}
           value={teamName}
           onChange={e => setTeamName(e.target.value)}
           onKeyDown={e => e.key === "Enter" && teamName.trim() && goToOrder(teamName.trim())}
@@ -1890,11 +1892,37 @@ function OrderRegistration({ onNext, onBack, teamId, initialOrder = null }) {
   const [gameType, setGameType] = useState(initialOrder?.gameType || "公式戦");
   const [tournament, setTournament] = useState(initialOrder?.tournament || "");
   const [batting, setBatting] = useState(initialOrder?.batting || "先攻");
+  // 自チーム枠の入力方法：registered=登録選手から選ぶ / free=自チーム以外を名前・背番号の直接入力で記録
+  const [myMode, setMyMode] = useState("registered");
+  const [freeTeamName, setFreeTeamName] = useState("");
+  const [freeLineup, setFreeLineup] = useState([]);
+  const [freeBench, setFreeBench] = useState([]);
+  const freeLabel = freeTeamName.trim() || "チーム1";
 
   const handleNext = () => {
     const errors = [];
     const warnings = [];
 
+    // 「自チーム以外を入力」：登録選手を使わず、直接入力したオーダーを自チーム枠に使う
+    let nextMyLineup = myLineup;
+    let nextMyBench = myBench;
+    let myTeamLabel = "";
+    if (myMode === "free") {
+      myTeamLabel = freeTeamName.trim();
+      if (!myTeamLabel) errors.push('チーム1：チーム名を入力して「次へ」を押してください');
+      const batters = freeLineup.filter(r => r.order != null && r.name);
+      if (batters.length < LINEUP_SIZE)
+        errors.push(`${freeLabel}：オーダーが9人揃っていません（選手名が入力されているのは${batters.length}人）`);
+      const freePos = freeLineup.filter(r => r.name && r.pos && r.pos !== '-').map(r => r.pos);
+      const freeDup = [...new Set(freePos.filter((p, i) => freePos.indexOf(p) !== i))];
+      if (freeDup.length > 0) warnings.push(`${freeLabel}：「${freeDup.join('」「')}」が重複しています（このまま記録できます）`);
+      if (freeLineup.length > 0 && !freeLineup.some(r => r.pos === "投"))
+        warnings.push(`${freeLabel}：投手が設定されていません（このまま記録できます）`);
+      nextMyLineup = freeLineup.filter(r => r.name).map(r => ({ order: r.order ?? null, playerId: null, player: { number: r.number, name: r.name }, pos: r.pos || "-" }));
+      nextMyBench = freeBench.filter(r => r.name).map(r => ({ number: r.number, name: r.name, pos: r.pos || "-" }));
+    }
+
+    if (myMode !== "free") {
     // 9人揃っているか（まだ何も設定していない場合を含む）
     if (myLineup.length < 9) {
       errors.push('自チーム：オーダーが9人揃っていません');
@@ -1919,6 +1947,7 @@ function OrderRegistration({ onNext, onBack, teamId, initialOrder = null }) {
     const dupPos = [...new Set(filledPos.filter((p, i) => filledPos.indexOf(p) !== i))];
     if (dupPos.length > 0)
       errors.push(`自チーム：「${dupPos.join('」「')}」が複数の選手に設定されています`);
+    } // myMode !== "free"
 
     // ポジション重複チェック（相手チーム）→ 警告のみ（記録開始は可能）
     const oppFilledPos = oppLineup.filter(r => r.pos && r.pos !== '-').map(r => r.pos);
@@ -1933,7 +1962,7 @@ function OrderRegistration({ onNext, onBack, teamId, initialOrder = null }) {
     if (errors.length > 0) { setOrderErrors([...errors, ...warnings.map(w => '⚠ ' + w)]); return; }
 
     setOrderErrors(warnings.map(w => '⚠ ' + w));
-    onNext({ myLineup, myBench, teamId, oppLineup, oppBench, oppTeamName, gameDate, gameType, tournament, batting });
+    onNext({ myLineup: nextMyLineup, myBench: nextMyBench, teamId, oppLineup, oppBench, oppTeamName, gameDate, gameType, tournament, batting, myFree: myMode === "free", myTeamLabel });
   };
 
   return (
@@ -1987,7 +2016,7 @@ function OrderRegistration({ onNext, onBack, teamId, initialOrder = null }) {
             />
           )}
           <div style={{ display:"flex", alignItems:"center", gap:6, background:C.bg, padding:"4px 10px 4px 6px", borderRadius:10, border:`1px solid ${C.divider}`, flexShrink:0 }}>
-            <span style={{ fontSize:11, color:C.textTer, whiteSpace:"nowrap" }}>自チーム</span>
+            <span style={{ fontSize:11, color:C.textTer, whiteSpace:"nowrap", maxWidth:96, overflow:"hidden", textOverflow:"ellipsis" }}>{myMode === "free" ? freeLabel : "自チーム"}</span>
             {["先攻","後攻"].map(v => (
               <div key={v} onClick={() => setBatting(v)}
                 style={{ fontSize:13, padding:"5px 11px", borderRadius:6, cursor:"pointer", fontWeight:700,
@@ -2001,7 +2030,7 @@ function OrderRegistration({ onNext, onBack, teamId, initialOrder = null }) {
 
         {/* タブ */}
         <div style={{ display: "flex" }}>
-          {[{ id: "my", label: `自チーム` }, { id: "opp", label: "相手チーム" }].map(t => (
+          {[{ id: "my", label: myMode === "free" ? freeLabel : "自チーム" }, { id: "opp", label: myMode === "free" ? (oppTeamName || "チーム2") : "相手チーム" }].map(t => (
             <div key={t.id} onClick={() => setTab(t.id)} style={{
               flex: 1, padding: "10px 8px", textAlign: "center",
               fontSize: 13, fontWeight: 600, cursor: "pointer", userSelect: "none",
@@ -2025,7 +2054,25 @@ function OrderRegistration({ onNext, onBack, teamId, initialOrder = null }) {
       {/* コンテンツ */}
       <div style={{ padding: "16px 16px 32px" }}>
         <div style={{ display: tab === "my" ? "block" : "none" }}>
-          <MyTeamTab teamId={teamId} onLineupChange={setMyLineup} onBenchChange={setMyBench}/>
+          {/* 入力方法の切り替え：登録選手から選ぶ / 自チーム以外を入力 */}
+          <div style={{ display: "flex", gap: 4, padding: 4, marginBottom: 12, background: C.card, borderRadius: 12, border: `1px solid ${C.divider}` }}>
+            {[{ id: "registered", label: "登録選手から選ぶ" }, { id: "free", label: "自チーム以外を入力" }].map(m => (
+              <div key={m.id} onClick={() => { setMyMode(m.id); setOrderErrors([]); }}
+                style={{ flex: 1, textAlign: "center", padding: "8px 6px", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: "pointer", userSelect: "none",
+                  background: myMode === m.id ? C.brand : "transparent", color: myMode === m.id ? C.brandText : C.textSec }}>
+                {m.label}
+              </div>
+            ))}
+          </div>
+          <div style={{ display: myMode === "registered" ? "block" : "none" }}>
+            <MyTeamTab teamId={teamId} onLineupChange={setMyLineup} onBenchChange={setMyBench}/>
+          </div>
+          <div style={{ display: myMode === "free" ? "block" : "none" }}>
+            <div style={{ fontSize: 11, color: C.textSec, lineHeight: 1.6, margin: "0 4px 10px" }}>
+              選手管理に登録していないチームの試合を記録できます。この試合は勝敗・通算成績には含まれません。
+            </div>
+            <OpponentTab onLineupChange={setFreeLineup} onBenchChange={setFreeBench} onTeamNameChange={setFreeTeamName} useDevDefaults={false} teamLabel="チーム"/>
+          </div>
         </div>
         <div style={{ display: tab === "opp" ? "block" : "none" }}>
           <OpponentTab onLineupChange={setOppLineup} onBenchChange={setOppBench} onTeamNameChange={setOppTeamName}/>
@@ -2469,7 +2516,8 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
     ? gameOrder.myLineup.filter(r => r.player).map(r => ({ playerId:r.playerId ?? null, order:r.order, number:r.player.number, name:r.player.name, pos:r.pos||"-" }))
     : BATTERS_A;
   const oppLineupRaw = (gameOrder?.oppLineup?.length > 0) ? gameOrder.oppLineup : BATTERS_B;
-  const myTeamNameRaw = teamName || TEAM_A;
+  const ownTeamName = teamName || TEAM_A; // 保存・一覧の紐付けに使う自チーム名
+  const myTeamNameRaw = gameOrder?.myTeamLabel || ownTeamName; // 「自チーム以外を入力」のときは入力したチーム名を表示に使う
   const oppTeamNameRaw = editableOppTeamName;
   // 先攻=自チームが表(A)、後攻=相手が表(A)（試合開始時の基本ラインナップ）
   const baseLineupA = batting === "後攻" ? oppLineupRaw : myLineupRaw;
@@ -3040,7 +3088,7 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
     setSaving(true);
     try {
       const payload = {
-        team_name: myTeamNameRaw,
+        team_name: ownTeamName,
         opponent: opp,
         game_date: meta.gameDate,
         season:    meta.season,
@@ -3058,11 +3106,13 @@ function GameRecordScreen({ onBack, onEditOrder, gameOrder, teamName, resumeData
           batting, lineup: activeBattersA,
           oppTeamName, oppLineup: activeBattersB,
           myBench: gameOrder?.myBench || [], oppBench: gameOrder?.oppBench || [],
+          myFree: !!gameOrder?.myFree, myTeamLabel: gameOrder?.myTeamLabel || null,
           currentLineupA, currentLineupB, substitutions, runnerPitchers,
           startingLineupA: startingLineupA.current, startingLineupB: startingLineupB.current,
         } : {
           batting, lineup: activeBattersA, oppTeamName, oppLineup: activeBattersB,
           myBench: gameOrder?.myBench || [], oppBench: gameOrder?.oppBench || [],
+          myFree: !!gameOrder?.myFree, myTeamLabel: gameOrder?.myTeamLabel || null,
           currentLineupA, currentLineupB, substitutions, runnerPitchers,
           startingLineupA: startingLineupA.current, startingLineupB: startingLineupB.current,
         },
@@ -4126,6 +4176,15 @@ const sRISP = (s) => s.risp_ab === 0 ? "-" : (s.risp_hit / s.risp_ab).toFixed(3)
 // ─────────────────────────────
 // 試合タブ（ホーム画面）
 // ─────────────────────────────
+// 「自チーム以外を入力」で記録した試合（game_state.myFree）を見分けるため、JSONパス付きで取得する。
+// JSONパス指定が通らない環境でも一覧・成績が壊れないよう、失敗時は従来のselectにフォールバックする。
+const fetchGamesWithExt = async (teamName, cols) => {
+  const q = (sel) => supabase.from("nsb_games").select(sel).eq("team_name", teamName).order("game_date", { ascending: false });
+  const res = await q(`${cols}, ext:game_state->>myFree, ext_name:game_state->>myTeamLabel`);
+  return res.error ? await q(cols) : res;
+};
+const isExtGame = (g) => g.ext === "true" || g.ext === true;
+
 function GamesTab({ team, onStartRecord, onStartOrder, onResume, onEdit }) {
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -4137,16 +4196,12 @@ function GamesTab({ team, onStartRecord, onStartOrder, onResume, onEdit }) {
 
   useEffect(() => {
     if (!team) return;
-    supabase
-      .from("nsb_games")
-      .select("id, game_date, opponent, score_my, score_opp, status, season, game_type")
-      .eq("team_name", team.name)
-      .order("game_date", { ascending: false })
+    fetchGamesWithExt(team.name, "id, game_date, opponent, score_my, score_opp, status, season, game_type")
       .then(({ data }) => { setGames(data || []); setLoading(false); });
   }, [team]);
 
   const filtered = typeFilter === "all" ? games : games.filter(g => g.game_type === typeFilter);
-  const completed = filtered.filter(g => g.status !== "in_progress");
+  const completed = filtered.filter(g => g.status !== "in_progress" && !isExtGame(g)); // 他チームの試合は勝敗に含めない
   const wins    = completed.filter(g => g.score_my > g.score_opp).length;
   const losses  = completed.filter(g => g.score_my < g.score_opp).length;
   const draws   = completed.filter(g => g.score_my === g.score_opp).length;
@@ -4159,6 +4214,7 @@ function GamesTab({ team, onStartRecord, onStartOrder, onResume, onEdit }) {
   };
   const resultLabel = (g) => {
     if (g.status === "in_progress") return { text: "▶", bg: C.brandLight, color: C.brand };
+    if (isExtGame(g)) return { text: "他", bg: "#F0F0F0", color: C.textSec };
     if (g.score_my > g.score_opp) return { text: "勝", bg: C.brandLight, color: C.brand };
     if (g.score_my < g.score_opp) return { text: "負", bg: "#FEF0F0", color: "#8B2020" };
     return { text: "分", bg: "#F0F0F0", color: C.textSec };
@@ -4251,10 +4307,10 @@ function GamesTab({ team, onStartRecord, onStartOrder, onResume, onEdit }) {
                         : () => onEdit && onEdit(g.id)}>
                       <div style={{ width: 36, fontSize: 11, color: C.textTer, flexShrink: 0 }}>{fmtDate(g.game_date)}</div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: C.textPri }}>vs {g.opponent}</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: C.textPri }}>{isExtGame(g) ? `${g.ext_name || "他チーム"} vs ${g.opponent}` : `vs ${g.opponent}`}</div>
                         {g.status === "in_progress"
                           ? <div style={{ fontSize: 10, color: C.brand, fontWeight: 600 }}>▶ タップして続きを入力</div>
-                          : g.game_type && <div style={{ fontSize: 10, color: C.textTer }}>{g.game_type}</div>}
+                          : (g.game_type || isExtGame(g)) && <div style={{ fontSize: 10, color: C.textTer }}>{[g.game_type, isExtGame(g) ? "他チームの試合（勝敗・成績に含めない）" : null].filter(Boolean).join("　")}</div>}
                       </div>
                       <div style={{ fontSize: 15, fontWeight: 800, color: C.textPri, marginRight: 8 }}>{g.score_my} - {g.score_opp}</div>
                       <div style={{ width: 26, height: 26, borderRadius: "50%", background: rl.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -4322,18 +4378,14 @@ function SeasonStatsTab({ team }) {
   useEffect(() => {
     if (!team) return;
     Promise.all([
-      supabase
-        .from("nsb_games")
-        .select("id, game_date, opponent, score_my, score_opp, status, season, game_type, game_log")
-        .eq("team_name", team.name)
-        .order("game_date", { ascending: false }),
+      fetchGamesWithExt(team.name, "id, game_date, opponent, score_my, score_opp, status, season, game_type, game_log"),
       supabase
         .from("nsb_players")
         .select("id, number, name")
         .eq("team_id", team.id)
         .order("number"),
     ]).then(([gRes, pRes]) => {
-      setGames(gRes.data || []);
+      setGames((gRes.data || []).filter(g => !isExtGame(g))); // 他チームの試合は通算成績に含めない
       setAllPlayers(pRes.data || []);
       setLoading(false);
     });
@@ -4740,6 +4792,7 @@ function NeoScoreBookApp() {
       oppLineup: batting === "先攻" ? (gs.oppLineup || []) : (gs.lineup || []),
       oppTeamName: data.opponent || "",
       myBench: gs.myBench || [], oppBench: gs.oppBench || [],
+      myFree: !!gs.myFree, myTeamLabel: gs.myTeamLabel || "",
       gameDate: data.game_date, gameType: data.game_type, tournament: data.tournament,
     };
     return { data, gs, batting, scoreA, scoreB, order, log: data.game_log || [] };

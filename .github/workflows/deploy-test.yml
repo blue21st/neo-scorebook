@@ -1,0 +1,38 @@
+name: Deploy test to baseball.versus.jp/test/
+
+# 試験用の配置。本番（baseball.versus.jp 直下）には一切触れない。
+# online-test ブランチへの push、または Actions 画面からの手動実行で、/test/ にだけアップロードする。
+# 画面は https://baseball.versus.jp/test/neo-scorebook.html で開ける（バージョン表示に「テスト版」と出る）。
+# ※ つながる先の Supabase は本番と同じ。保存した試合は本番の試合一覧にも載る。
+
+on:
+  push:
+    branches: [online-test]
+  workflow_dispatch:
+
+jobs:
+  deploy-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare deploy folder
+        run: |
+          mkdir -p dist
+          cp neo-scorebook/neo-scorebook.html dist/
+          cp neo-scorebook/scorebook-logic.js dist/
+          cp neo-scorebook/neo-scorebook-icon.png dist/
+          cp neo-scorebook/neo-scorebook-icon-180.png dist/
+          cp neo-scorebook/neo-scorebook-icon-32.png dist/
+
+      - name: Upload via FTPS (test folder)
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          local-dir: ./dist/
+          server-dir: ./test/
+          dangerous-clean-slate: false

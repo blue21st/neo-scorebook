@@ -52,6 +52,7 @@ flowchart LR
 | 認証 | なし。anon キーで直接アクセス |
 | チームの扱い | `nsb_teams` の先頭1件を自チームとして使う（1チーム専用） |
 | デプロイ | `.github/workflows/deploy.yml`。FTPの接続情報は GitHub Secrets |
+| 試験用の配置 | `online-test` ブランチへの push で `https://baseball.versus.jp/test/neo-scorebook.html` に配置（`.github/workflows/deploy-test.yml`）。本番とはフォルダが別で、画面のバージョン表示に「テスト版」と出る。Supabase は本番と同じ |
 
 ### テーブル
 
