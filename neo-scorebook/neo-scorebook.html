@@ -32,7 +32,7 @@
     const { useState, useRef, useEffect } = React;
 
     // /test/ 配下（試験用の配置）で開いたときは、本番と取り違えないよう「テスト版」と表示する
-    const APP_VERSION = "v2026.11.23-4" + (location.pathname.includes("/test/") ? "（テスト版）" : "");
+    const APP_VERSION = "v2026.11.23-5" + (location.pathname.includes("/test/") ? "（テスト版）" : "");
 
     // 開発環境判定：ローカル（localhost / LAN内IP / file://）で開いたときだけ true。
     // 本番（baseball.versus.jp）では false になり、開発用の仮データは使われない。
@@ -1354,19 +1354,24 @@ function MyTeamTab({ teamId, onLineupChange, onBenchChange }) {
     setLoading(true);
     const [playersRes, prevGameRes] = await Promise.all([
       supabase.from("nsb_players").select("*").eq("team_id", teamId).order("number"),
-      supabase.from("nsb_games").select("game_state, game_date").not("game_state", "is", null).order("created_at", { ascending: false }).limit(1),
+      supabase.from("nsb_games").select("game_state, game_date").not("game_state", "is", null).order("created_at", { ascending: false }).limit(10),
     ]);
     const loadedPlayers = playersRes.data || [];
     setPlayers(loadedPlayers);
-    const prev = prevGameRes.data?.[0];
+    // 「自チーム以外を入力」で記録した試合は前回オーダーの対象にしない
+    const prev = (prevGameRes.data || []).find(g => g.game_state && !g.game_state.myFree);
     const notify = (nl) => {
       if (onLineupChange) onLineupChange(nl.map(r => ({ ...r, player: loadedPlayers.find(p => p.id === r.playerId) })));
     };
     if (prev?.game_state) {
       const prevBatting = prev.game_state.batting || "先攻";
+      // 前回の「スタメン」（試合開始時のオーダー）を使う。途中交代後の最終オーダーではない。
+      // 古い保存データには startingLineup が無いので、その場合だけ最終オーダー（lineup）にする。
+      const gsPrev = prev.game_state;
+      const startA = gsPrev.startingLineupA, startB = gsPrev.startingLineupB;
       const myPrevLineup = prevBatting === "先攻"
-        ? (prev.game_state.lineup || [])
-        : (prev.game_state.oppLineup || []);
+        ? ((startA && startA.length > 0) ? startA : (gsPrev.lineup || []))
+        : ((startB && startB.length > 0) ? startB : (gsPrev.oppLineup || []));
       if (myPrevLineup.length > 0) {
         setPrevOrder({ lineup: myPrevLineup, date: prev.game_date });
       }
@@ -1415,11 +1420,20 @@ function MyTeamTab({ teamId, onLineupChange, onBenchChange }) {
   const applyPrevOrder = () => {
     let newLineup;
     if (prevOrder) {
-      newLineup = prevOrder.lineup.map(r => ({
+      const toRow = (r) => ({
         order: r.order,
         playerId: players.find(p => p.number === r.number)?.id ?? null,
         pos: r.pos || "-",
-      }));
+      });
+      newLineup = prevOrder.lineup.filter(r => r.order != null).map(toRow);
+      // DH制：打順に入らない先発投手（order なし）は別枠に戻す
+      const dhRow = prevOrder.lineup.find(r => r.order == null && r.pos === "投");
+      const dhId = dhRow ? toRow(dhRow).playerId : null;
+      const hasP = newLineup.some(r => r.pos === "投");
+      setDhPitcherId(hasP ? null : dhId);
+      setLineup(newLineup);
+      notifyLineup(newLineup, hasP ? null : dhId);
+      return;
     } else {
       const defaultPos = ["投", "捕", "一", "二", "三", "遊", "左", "中", "右"];
       const sorted = [...players].sort((a, b) => a.number - b.number);
